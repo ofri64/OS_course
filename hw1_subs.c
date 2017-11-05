@@ -7,7 +7,6 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-#define bufferSize 1024
 #define NO_ENVIRONMENT_VARIABLES_ERROR "Error: At least one of the Environment Variables 'HW1DIR', 'HW1TF' does not exist\n"
 #define ARGUMENT_MISMATCH_ERROR "Error: You have to supply two argument variables to the program. But you only supplied %d\n"
 #define MEMORY_ERROR "Error: Memory Allocation Error occurred\n"
@@ -209,6 +208,7 @@ int writeStrToOutput(char* string){
             return -1;
         } else{
             totalWrittenBytes += writeBytes;
+            string += writeBytes;
         }
     }
     return 0;
