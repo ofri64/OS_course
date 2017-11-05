@@ -50,6 +50,7 @@ int main(int argc, char** argv) {
     int fd = open(filePath, O_RDWR);
     if (fd < 0){
         printf(FILE_NOT_OPEN_ERROR, strerror(errno));
+        free(filePath);
         exit_status = 1;
         return exit_status;
     }
