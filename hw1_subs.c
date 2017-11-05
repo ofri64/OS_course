@@ -17,10 +17,10 @@
 #define WRITE_TO_OUTPUT_ERROR "Error: Failed to write to output the new content %s\n"
 
 char* concatDirAndPath(char* dirPath, char* fileName);
-char* readTextFileToBuffer(int fileDescriptor);
 char* replaceStringContent(char* originalStr, char* replaceStr, char* newStr);
 int countNumReplacement(char* originalStr, char* replaceStr);
 int writeStrToOutput(char* string);
+char* readFile(int fileDescriptor);
 
 
 int main(int argc, char** argv) {
@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
 
     free(filePath);
 
-    char* fileContent = readTextFileToBuffer(fd);
+    char* fileContent = readFile(fd);
     if (fileContent == NULL){
         printf(CANNOT_READ_FILE_ERROR);
         close(fd);
@@ -106,48 +106,39 @@ char* concatDirAndPath(char* dirPath, char* fileName){
     }
 }
 
-char* readTextFileToBuffer(int fileDescriptor){
-    char* buffer = (char*) calloc(bufferSize+1, sizeof(char));
-    if (buffer == NULL){
+char* readFile(int fileDescriptor){
+    struct stat buffer;
+    int fileStat = fstat(fileDescriptor, &buffer);
+    if (fileStat < 0){
+        return NULL;
+    }
+    long size = buffer.st_size;
+    if (size <= 0){
+        return NULL;
+    }
+    char* outString = calloc((size_t) size+1, sizeof(char));
+    if (outString == NULL){
         printf(MEMORY_ERROR);
         return NULL;
     }
-    ssize_t bytesRead = read(fileDescriptor, buffer, bufferSize);
-    if (bytesRead < 0){
-        free(buffer);
-        return NULL;
-    }
-    if (bytesRead < bufferSize){ // read the entire file
-        buffer[bufferSize] = '\0';
-        return buffer;
-    }
-    int bufferCurrentSize = bufferSize;
-    int bufferNewSize = bufferCurrentSize * 2;
-    int firstRoundIndicator = 1;
-    while (bytesRead == bufferCurrentSize){
-        if (firstRoundIndicator == 0){
-            bufferCurrentSize = bufferNewSize;
-            bufferNewSize *= 2;
-        }
-        char* newBuffer = (char*) calloc((size_t ) bufferNewSize+1, sizeof(char));
-        if (newBuffer == NULL){
+    char* currentStringLocation = outString;
+    ssize_t totalBytesRead = 0;
+    ssize_t currentBytesRead;
+    while (totalBytesRead != size){
+        currentBytesRead = read(fileDescriptor, currentStringLocation, (size_t) size - totalBytesRead);
+        if (currentBytesRead < 0){
+            free(outString);
             printf(MEMORY_ERROR);
-            free(buffer);
             return NULL;
+        } else{
+            totalBytesRead += currentBytesRead;
+            currentStringLocation += currentBytesRead;
         }
-        strcat(newBuffer, buffer);
-        free(buffer);
-        buffer = newBuffer;
-        bytesRead = read(fileDescriptor, buffer + bufferCurrentSize, (size_t) bufferCurrentSize);
-        if (bytesRead < 0){
-            free(buffer);
-            return NULL;
-        }
-        firstRoundIndicator = 0;
     }
-    buffer[bufferCurrentSize+bytesRead] = '\0';
-    return buffer;
+    outString[size] = '\0';
+    return outString;
 }
+
 
 char* replaceStringContent(char* originalStr, char* replaceStr, char* newStr){
     size_t replaceLength = strlen(replaceStr);
