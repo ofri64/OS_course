@@ -20,6 +20,8 @@ char* concatDirAndPath(char* dirPath, char* fileName);
 char* readTextFileToBuffer(int fileDescriptor);
 char* replaceStringContent(char* originalStr, char* replaceStr, char* newStr);
 int countNumReplacement(char* originalStr, char* replaceStr);
+int writeStrToOutput(char* string);
+
 
 int main(int argc, char** argv) {
     char* HW1DIR = getenv("HW1DIR");
@@ -77,9 +79,8 @@ int main(int argc, char** argv) {
     }
     free(fileContent);
 
-    size_t newFileLength = strlen(newFile);
-    ssize_t writeBytes = write(1, newFile, newFileLength);
-    if (writeBytes != (int) newFileLength){
+    int writeStatus = writeStrToOutput(newFile);
+    if (writeStatus < 0){
         free(newFile);
         printf(WRITE_TO_OUTPUT_ERROR, strerror(errno));
         exit_status = 1;
@@ -97,11 +98,12 @@ char* concatDirAndPath(char* dirPath, char* fileName){
     char* filePath = (char*) calloc(dirPathLength + fileNameLength + 2, sizeof(char));
     if (filePath == NULL){
         return NULL;
+    } else{
+        strcat(filePath, dirPath);
+        strcat(filePath, "/");
+        strcat(filePath, fileName);
+        return filePath;
     }
-    strcat(filePath, dirPath);
-    strcat(filePath, "/");
-    strcat(filePath, fileName);
-    return filePath;
 }
 
 char* readTextFileToBuffer(int fileDescriptor){
@@ -200,4 +202,23 @@ int countNumReplacement(char* originalStr, char* replaceStr){
         counter++;
     }
     return counter;
+}
+
+
+int writeStrToOutput(char* string){
+    if (string == NULL){
+        return -1;
+    }
+    size_t stringLength = strlen(string);
+    size_t totalWrittenBytes = 0;
+    while (totalWrittenBytes < stringLength){
+        ssize_t writeBytes = write(1, string, stringLength - totalWrittenBytes);
+        if (writeBytes < 0){
+            printf(WRITE_TO_OUTPUT_ERROR, strerror(errno));
+            return -1;
+        } else{
+            totalWrittenBytes += writeBytes;
+        }
+    }
+    return 0;
 }
