@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <unistd.h>
+#include <stdbool.h>
 
 // arglist - a list of char* arguments (words) provided by the user
 // it contains count+1 items, where the last item (arglist[count]) and *only* the last is NULL
@@ -18,11 +22,17 @@ int pipeArgumentLocation(int count, char **arglist);
 
 int splitArgumentsOnPipe(char*** ptrForInputArgs, char*** ptrForOutputArgs,char** originalArgs,int inputCount, int outputCount, int pipeLocation);
 
+int runProcess(char** argsList);
+
+int runProcessMode(bool backgroundRun, char** argsList);
+
+int copyArgListNoAmp(int count, char** originalArgsList, char*** newArgsList);
+
 int main(void)
 {
 	if (prepare() != 0)
 		exit(-1);
-	
+
 	while (1)
 	{
 		char** arglist = NULL;
@@ -34,14 +44,14 @@ int main(void)
 			free(line);
 			break;
 		}
-    
+
 		arglist = (char**) malloc(sizeof(char*));
 		if (arglist == NULL) {
 			printf("malloc failed: %s\n", strerror(errno));
 			exit(-1);
 		}
 		arglist[0] = strtok(line, " \t\n");
-    
+
 		while (arglist[count] != NULL) {
 			++count;
 			arglist = (char**) realloc(arglist, sizeof(char*) * (count + 1));
@@ -49,10 +59,10 @@ int main(void)
 				printf("realloc failed: %s\n", strerror(errno));
 				exit(-1);
 			}
-      
+
 			arglist[count] = strtok(NULL, " \t\n");
 		}
-    
+
 		if (count != 0) {
 			if (!process_arglist(count, arglist)) {
 				free(line);
@@ -60,11 +70,11 @@ int main(void)
 				break;
 			}
 		}
-    
+
 		free(line);
 		free(arglist);
 	}
-	
+
 	if (finalize() != 0)
 		exit(-1);
 
@@ -92,18 +102,33 @@ int process_arglist(int count, char** arglist){
             splitStatus = splitArgumentsOnPipe(&inputProgArgList, &outputProgArgList, arglist, inputCount, outputCount, pipeLocation);
         }
 
-        for (int i = 0; i < inputCount; i++){
-            printf("input[%d] is: %s\n", i, inputProgArgList[i]);
-        }
-        for (int i = 0; i < outputCount; i++){
-            printf("input[%d] is: %s\n", i, outputProgArgList[i]);
-        }
-
+        free(inputProgArgList);
+        free(outputProgArgList);
     }
 
 
-    if (execBackground == 1){
-        //TODO: implement running in background mode
+    else {
+        int excStatus = -1;
+
+        if (execBackground == 1){
+
+            char** newArgsList;
+            int copyStatus = copyArgListNoAmp(count, arglist, &newArgsList);
+
+            if (copyStatus == -1){
+                //TODO: implement memory allocation failure scenario
+            }
+            excStatus = runProcessMode(true, newArgsList);
+            free(newArgsList);
+        }
+
+        else {
+            excStatus = runProcessMode(false, arglist);
+            }
+
+        if (excStatus == -1){
+            //TODO: implement error handling for this case
+        }
     }
 
     return 1;
@@ -111,7 +136,13 @@ int process_arglist(int count, char** arglist){
 }
 
 int prepare(void){;}
-int finalize(void){;}
+
+int finalize(void){
+    int status = -1;
+    while (-1 != wait(&status)) {};
+    return 0;
+    //TODO: implement wait for all sons to prevent zombies.
+}
 
 int execInBackground(int count, char** arglist){
     for (int i = 0; i < count; i++){
@@ -163,3 +194,56 @@ int splitArgumentsOnPipe(char*** ptrForInputArgs, char*** ptrForOutputArgs,char*
 
     return 1;
 }
+
+int runProcess(char** argsList) {
+    pid_t execPid = fork();
+
+    if (execPid == -1) {
+        //TODO: implement error handling
+        return -1;
+    }
+
+    if (execPid == 0) {
+        int execRunStatus = execv(argsList[0], argsList);
+
+        if (execRunStatus == -1) {
+            //TODO: implement error handling for process could not run
+            return -1;
+        }
+    }
+
+    // only executes in father process
+    return execPid;
+}
+
+int runProcessMode(bool backgroundRun, char** argsList) {
+    pid_t sonPid = runProcess(argsList);
+    if (backgroundRun) {
+        return 1;
+    }
+    else {
+        int execFinishStatus = -1;
+        pid_t finishPid = waitpid(sonPid, &execFinishStatus, 0);
+        //TODO: implenment what to do when process already finished (call returns -1)
+        return 1;
+    }
+}
+
+int copyArgListNoAmp(int count, char** originalArgsList, char*** newArgsList){
+    int realCount = count-1;
+    int realSize = count;
+    char** args = (char**) malloc(realSize * sizeof(char*));
+
+    if (args == NULL){
+        return -1;
+    }
+
+    for (int i = 0; i < realCount; i++){
+        args[i] = originalArgsList[i];
+    }
+
+    args[realCount] = NULL;
+    *newArgsList = args;
+    return 1;
+}
+
