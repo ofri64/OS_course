@@ -20,13 +20,13 @@ int execInBackground(int count, char **arglist);
 
 int pipeArgumentLocation(int count, char **arglist);
 
-int splitArgumentsOnPipe(char*** ptrForInputArgs, char*** ptrForOutputArgs,char** originalArgs,int inputCount, int outputCount, int pipeLocation);
+void replacePipeArg(char** argList, int pipeLocation);
 
 int runProcess(char** argsList);
 
 int runProcessMode(bool backgroundRun, char** argsList);
 
-int copyArgListNoAmp(int count, char** originalArgsList, char*** newArgsList);
+int runPipeProcess(int* pipfd, char** argList, int processType);
 
 int main(void)
 {
@@ -90,36 +90,38 @@ int process_arglist(int count, char** arglist){
 
     if (pipeLocation > 0){
 
-        int inputCount = pipeLocation;
-        char** inputProgArgList;
+        replacePipeArg(arglist, pipeLocation);
 
-        int outputCount = count - pipeLocation -1;
-        char** outputProgArgList;
+        char** inputArgList = arglist;
+        char** outputArgList = arglist + pipeLocation+1;
 
-        int splitStatus = -1;
 
-        while (splitStatus == -1){
-            splitStatus = splitArgumentsOnPipe(&inputProgArgList, &outputProgArgList, arglist, inputCount, outputCount, pipeLocation);
+        int pipefd[2];
+
+        //make pipe
+        pipe(pipefd);
+
+        // run the input process wait for it to return and only then run the output process
+        int status = runPipeProcess(pipefd, inputArgList, 0);
+        if (status == -1){
+            //TODO: implement break on error
         }
 
-        free(inputProgArgList);
-        free(outputProgArgList);
+        status = runPipeProcess(pipefd, outputArgList, 1);
+
+        if (status == -1){
+            //TODO: implement break on error
+        }
     }
 
-
     else {
-        int excStatus = -1;
+        int excStatus;
 
         if (execBackground == 1){
 
-            char** newArgsList;
-            int copyStatus = copyArgListNoAmp(count, arglist, &newArgsList);
-
-            if (copyStatus == -1){
-                //TODO: implement memory allocation failure scenario
-            }
-            excStatus = runProcessMode(true, newArgsList);
-            free(newArgsList);
+            // remove the "&" from the arguments
+            arglist[count-1] = (char*) NULL;
+            excStatus = runProcessMode(true, arglist);
         }
 
         else {
@@ -164,36 +166,11 @@ int pipeArgumentLocation(int count, char **arglist){
     return 0; // 0 if non pipe found
 }
 
-int splitArgumentsOnPipe(char*** ptrForInputArgs, char*** ptrForOutputArgs,char** originalArgs,int inputCount, int outputCount, int pipeLocation){
-    char** inputArgs = (char**) malloc((inputCount+1) * sizeof(char*));
-    char** outputArgs = (char**) malloc((outputCount+1) * sizeof(char*));
 
-    if (inputArgs == NULL || outputArgs == NULL){
-        return -1; // allocation failed
-    }
-
-    // copy argument to new separated arrays
-    int totalCount = inputCount + outputCount +1;
-    for (int i = 0; i < totalCount; i++){
-
-        if(i < pipeLocation){
-            inputArgs[i] = originalArgs[i];
-        }
-        else if (i > pipeLocation){
-            outputArgs[i-(pipeLocation+1)] = originalArgs[i];
-        }
-    }
-
-    // append NULL at the end of the arguments array
-    inputArgs[inputCount] = NULL;
-    outputArgs[outputCount] = NULL;
-
-    // update pointer to point the new created arguments array and return valid value
-    *ptrForInputArgs = inputArgs;
-    *ptrForOutputArgs = outputArgs;
-
-    return 1;
+void replacePipeArg(char** argList, int pipeLocation){
+    argList[pipeLocation] = (char*) NULL;
 }
+
 
 int runProcess(char** argsList) {
     pid_t execPid = fork();
@@ -229,21 +206,41 @@ int runProcessMode(bool backgroundRun, char** argsList) {
     }
 }
 
-int copyArgListNoAmp(int count, char** originalArgsList, char*** newArgsList){
-    int realCount = count-1;
-    int realSize = count;
-    char** args = (char**) malloc(realSize * sizeof(char*));
 
-    if (args == NULL){
-        return -1;
+int runPipeProcess(int* pipfd, char** argList, int processType){
+    int pid = fork();
+    if (pid < 0 ){
+        //TODO: handle error - return from function and raise error
     }
 
-    for (int i = 0; i < realCount; i++){
-        args[i] = originalArgsList[i];
+    if (pid == 0){
+        if (processType == 0){
+            // for input son process replace stdout with pipe write side and run program
+
+            dup2(pipfd[1], 1);
+
+            close(pipfd[0]);
+
+        } else {
+            // for output son process replace stdin with pipe read side and run program
+
+            dup2(pipfd[0], 0);
+
+            close(pipfd[1]);
+
+        }
+
+        execvp(argList[0], argList);
     }
 
-    args[realCount] = NULL;
-    *newArgsList = args;
-    return 1;
+    // father process waits for the input to return
+    if (pid > 0){
+
+//        int status;
+//        pid_t retPid = waitpid(pid, &status, 0);
+//        if (retPid != -1) {
+            //TODO: implement error
+//        }
+        return 1;
+    }
 }
-
