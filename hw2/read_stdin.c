@@ -7,11 +7,10 @@
 
 int main(){
     char data[512];
-    long status = read(0, data, 521);
-    if (status < 0){
-        write(2, "Error\n", 6);
+    long status;
+    while ((status = read(0, data, 512)) <= 0){
+        printf("couldn't read");
     }
-    else{
-        printf("You directed me with: %s", data);
-    }
+    data[status] = '\0';
+    printf("You directed me with: %s\n", data);
 }

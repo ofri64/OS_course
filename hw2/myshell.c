@@ -217,30 +217,31 @@ int runPipeProcess(int* pipfd, char** argList, int processType){
         if (processType == 0){
             // for input son process replace stdout with pipe write side and run program
 
+            close(pipfd[0]);
+
             dup2(pipfd[1], 1);
 
-            close(pipfd[0]);
 
         } else {
             // for output son process replace stdin with pipe read side and run program
 
-            dup2(pipfd[0], 0);
-
             close(pipfd[1]);
 
+            dup2(pipfd[0], 0);
         }
 
-        execvp(argList[0], argList);
+        int s = execvp(argList[0], argList);
     }
 
     // father process waits for the input to return
     if (pid > 0){
 
-//        int status;
-//        pid_t retPid = waitpid(pid, &status, 0);
-//        if (retPid != -1) {
+        close(pipfd[1]);
+        int status;
+        pid_t retPid = waitpid(pid, &status, 0);
+        if (retPid != -1) {
             //TODO: implement error
-//        }
+        }
         return 1;
     }
 }
