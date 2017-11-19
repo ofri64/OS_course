@@ -30,55 +30,55 @@ int runPipeProcess(int* pipfd, char** argList, int processType);
 
 int main(void)
 {
-	if (prepare() != 0)
-		exit(-1);
+    if (prepare() != 0)
+        exit(-1);
 
-	while (1)
-	{
-		char** arglist = NULL;
-		char* line = NULL;
-		size_t size;
-		int count = 0;
+    while (1)
+    {
+        char** arglist = NULL;
+        char* line = NULL;
+        size_t size;
+        int count = 0;
 
-		if (getline(&line, &size, stdin) == -1) {
-			free(line);
-			break;
-		}
+        if (getline(&line, &size, stdin) == -1) {
+            free(line);
+            break;
+        }
 
-		arglist = (char**) malloc(sizeof(char*));
-		if (arglist == NULL) {
-			printf("malloc failed: %s\n", strerror(errno));
-			exit(-1);
-		}
-		arglist[0] = strtok(line, " \t\n");
+        arglist = (char**) malloc(sizeof(char*));
+        if (arglist == NULL) {
+            printf("malloc failed: %s\n", strerror(errno));
+            exit(-1);
+        }
+        arglist[0] = strtok(line, " \t\n");
 
-		while (arglist[count] != NULL) {
-			++count;
-			arglist = (char**) realloc(arglist, sizeof(char*) * (count + 1));
-			if (arglist == NULL) {
-				printf("realloc failed: %s\n", strerror(errno));
-				exit(-1);
-			}
+        while (arglist[count] != NULL) {
+            ++count;
+            arglist = (char**) realloc(arglist, sizeof(char*) * (count + 1));
+            if (arglist == NULL) {
+                printf("realloc failed: %s\n", strerror(errno));
+                exit(-1);
+            }
 
-			arglist[count] = strtok(NULL, " \t\n");
-		}
+            arglist[count] = strtok(NULL, " \t\n");
+        }
 
-		if (count != 0) {
-			if (!process_arglist(count, arglist)) {
-				free(line);
-				free(arglist);
-				break;
-			}
-		}
+        if (count != 0) {
+            if (!process_arglist(count, arglist)) {
+                free(line);
+                free(arglist);
+                break;
+            }
+        }
 
-		free(line);
-		free(arglist);
-	}
+        free(line);
+        free(arglist);
+    }
 
-	if (finalize() != 0)
-		exit(-1);
+    if (finalize() != 0)
+        exit(-1);
 
-	return 0;
+    return 0;
 }
 
 
@@ -90,28 +90,57 @@ int process_arglist(int count, char** arglist){
 
     if (pipeLocation > 0){
 
-        replacePipeArg(arglist, pipeLocation);
-
-        char** inputArgList = arglist;
-        char** outputArgList = arglist + pipeLocation+1;
-
-
         int pipefd[2];
+        int pid;
 
-        //make pipe
+        char *cat_args[] = {"cat", "scores", NULL, NULL};
+        char *grep_args[] = {"grep", "hi", NULL};
+        char *python[] = {"python", "print_args.py", "hi", NULL};
+
+        // make a pipe (fds go in pipefd[0] and pipefd[1])
+
         pipe(pipefd);
 
-        // run the input process wait for it to return and only then run the output process
-        int status = runPipeProcess(pipefd, inputArgList, 0);
-        if (status == -1){
-            //TODO: implement break on error
-        }
+        pid = fork();
 
-        status = runPipeProcess(pipefd, outputArgList, 1);
+        if (pid == 0)
+        {
+            // child gets here and handles "grep Villanova"
 
-        if (status == -1){
-            //TODO: implement break on error
+            // replace standard input with input part of pipe
+
+            dup2(pipefd[0], 0);
+
+            // close unused hald of pipe
+
+            close(pipefd[1]);
+
+            // execute grep
+
+            execvp("grep", grep_args);
         }
+        else
+        {
+            int newpid;
+            newpid = fork();
+            if (newpid == 0){
+                // parent gets here and handles "cat scores"
+
+                // replace standard output with output part of pipe
+
+                dup2(pipefd[1], 1);
+
+                // close unused unput half of pipe
+
+                close(pipefd[0]);
+
+                // execute cat
+
+                execvp("python", python);
+            }
+        }
+        int status;
+        wait(&status);
     }
 
     else {
@@ -126,7 +155,7 @@ int process_arglist(int count, char** arglist){
 
         else {
             excStatus = runProcessMode(false, arglist);
-            }
+        }
 
         if (excStatus == -1){
             //TODO: implement error handling for this case
