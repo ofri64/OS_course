@@ -2,11 +2,10 @@
 // Created by okleinfeld on 11/18/17.
 //
 
+#include <unistd.h>
 #include <stdio.h>
 
 int main(int argc, char** argv){
-    if (argc != 2){
-        return -1;
-    }
-    printf("%s", argv[1]);
+    write(1, "hello world\n", 12);
+    close(1);
 }

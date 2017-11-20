@@ -97,6 +97,7 @@ int process_arglist(int count, char** arglist){
         char *cat_args[] = {"cat", "scores", NULL, NULL};
         char *grep_args[] = {"grep", "hi", NULL};
         char *python[] = {"python", "print_args.py", "hi", NULL};
+        char *echo_string[] = {"echo_string", "hi", NULL};
 
         // make a pipe (fds go in pipefd[0] and pipefd[1])
 
@@ -104,7 +105,27 @@ int process_arglist(int count, char** arglist){
 
         firstPid = fork();
 
-        if (firstPid == 0)
+        if (firstPid == 0){
+            // parent gets here and handles "cat scores"
+
+            // replace standard output with output part of pipe
+
+            dup2(pipefd[1], 1);
+
+            // close unused unput half of pipe
+
+            close(pipefd[0]);
+
+            // execute cat
+
+            execvp("python", python);
+        }
+
+        close(pipefd[1]);
+
+        secondPid = fork();
+
+        if (secondPid == 0)
         {
             // child gets here and handles "grep Villanova"
 
@@ -121,23 +142,7 @@ int process_arglist(int count, char** arglist){
             execvp("grep", grep_args);
         }
 
-        secondPid = fork();
 
-        if (secondPid == 0){
-            // parent gets here and handles "cat scores"
-
-            // replace standard output with output part of pipe
-
-            dup2(pipefd[1], 1);
-
-            // close unused unput half of pipe
-
-            close(pipefd[0]);
-
-            // execute cat
-
-            execvp("python", python);
-        }
 
         int status;
         bool firstFinish = false;
