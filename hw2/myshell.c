@@ -91,7 +91,8 @@ int process_arglist(int count, char** arglist){
     if (pipeLocation > 0){
 
         int pipefd[2];
-        int pid;
+        int firstPid;
+        int secondPid;
 
         char *cat_args[] = {"cat", "scores", NULL, NULL};
         char *grep_args[] = {"grep", "hi", NULL};
@@ -101,9 +102,9 @@ int process_arglist(int count, char** arglist){
 
         pipe(pipefd);
 
-        pid = fork();
+        firstPid = fork();
 
-        if (pid == 0)
+        if (firstPid == 0)
         {
             // child gets here and handles "grep Villanova"
 
@@ -119,28 +120,41 @@ int process_arglist(int count, char** arglist){
 
             execvp("grep", grep_args);
         }
-        else
-        {
-            int newpid;
-            newpid = fork();
-            if (newpid == 0){
-                // parent gets here and handles "cat scores"
 
-                // replace standard output with output part of pipe
+        secondPid = fork();
 
-                dup2(pipefd[1], 1);
+        if (secondPid == 0){
+            // parent gets here and handles "cat scores"
 
-                // close unused unput half of pipe
+            // replace standard output with output part of pipe
 
-                close(pipefd[0]);
+            dup2(pipefd[1], 1);
 
-                // execute cat
+            // close unused unput half of pipe
 
-                execvp("python", python);
+            close(pipefd[0]);
+
+            // execute cat
+
+            execvp("python", python);
+        }
+
+        int status;
+        bool firstFinish = false;
+        bool secondFinish = false;
+        pid_t son;
+        while (firstFinish == false || secondFinish == false){
+
+            son = wait(&status);
+            if (son == firstPid){
+                firstFinish = true;
+            } else if (son == secondPid){
+                secondFinish = true;
+            } else if(son == -1){
+                break;
             }
         }
-        int status;
-        wait(&status);
+
     }
 
     else {
@@ -148,7 +162,7 @@ int process_arglist(int count, char** arglist){
 
         if (execBackground == 1){
 
-            // remove the "&" from the arguments
+// remove the "&" from the arguments
             arglist[count-1] = (char*) NULL;
             excStatus = runProcessMode(true, arglist);
         }
@@ -158,9 +172,11 @@ int process_arglist(int count, char** arglist){
         }
 
         if (excStatus == -1){
-            //TODO: implement error handling for this case
+//TODO: implement error handling for this case
         }
     }
+
+
 
     return 1;
 
