@@ -138,7 +138,8 @@ int process_arglist(int count, char** arglist){
 
             execvp("python", python);
         }
-
+        
+        close(pipefd[0]);
         int status;
         bool firstFinish = false;
         bool secondFinish = false;
