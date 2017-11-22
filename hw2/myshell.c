@@ -20,8 +20,6 @@ int execInBackground(int count, char **arglist);
 
 int pipeArgumentLocation(int count, char **arglist);
 
-void replacePipeArg(char** argList, int pipeLocation);
-
 int runProcess(char** argsList);
 
 int runProcessMode(bool backgroundRun, char** argsList);
@@ -95,9 +93,9 @@ int process_arglist(int count, char** arglist){
         int secondPid;
 
         char *cat_args[] = {"cat", "scores", NULL, NULL};
-        char *grep_args[] = {"grep", "hi", NULL};
-        char *python[] = {"python", "print_args.py", "hi", NULL};
-        char *echo_string[] = {"echo_string", "hi", NULL};
+        char *grep_args[] = {"grep", "hello", NULL};
+        char *python[] = {"python", "print_args.py", "h", "omer", NULL};
+        char *echo_string[] = {"/home/okleinfeld/GitProjects/OS_course/hw2/echo_string", "hi", NULL};
 
         // make a pipe (fds go in pipefd[0] and pipefd[1])
 
@@ -118,7 +116,7 @@ int process_arglist(int count, char** arglist){
 
             // execute cat
 
-            execvp("python", python);
+            execvp("/home/okleinfeld/GitProjects/OS_course/hw2/echo_string", echo_string);
         }
 
         close(pipefd[1]);
@@ -141,8 +139,6 @@ int process_arglist(int count, char** arglist){
 
             execvp("grep", grep_args);
         }
-
-
 
         int status;
         bool firstFinish = false;
@@ -167,7 +163,7 @@ int process_arglist(int count, char** arglist){
 
         if (execBackground == 1){
 
-// remove the "&" from the arguments
+        // remove the "&" from the arguments
             arglist[count-1] = (char*) NULL;
             excStatus = runProcessMode(true, arglist);
         }
@@ -217,10 +213,6 @@ int pipeArgumentLocation(int count, char **arglist){
 }
 
 
-void replacePipeArg(char** argList, int pipeLocation){
-    argList[pipeLocation] = (char*) NULL;
-}
-
 
 int runProcess(char** argsList) {
     pid_t execPid = fork();
@@ -231,7 +223,7 @@ int runProcess(char** argsList) {
     }
 
     if (execPid == 0) {
-        int execRunStatus = execv(argsList[0], argsList);
+        int execRunStatus = execvp(argsList[0], argsList);
 
         if (execRunStatus == -1) {
             //TODO: implement error handling for process could not run
