@@ -24,7 +24,8 @@ int runProcess(char** argsList);
 
 int runProcessMode(bool backgroundRun, char** argsList);
 
-int runPipeProcess(int* pipfd, char** argList, int processType);
+int runPipeProcess(char** inputArgsList, char** outputArgsList);
+
 
 int main(void)
 {
@@ -86,77 +87,17 @@ int process_arglist(int count, char** arglist){
     //TODO: check for errors from return function - what happens with return value -1
 
 
-    if (pipeLocation > 0){
+    if (pipeLocation > 0) {
 
-        int pipefd[2];
-        int firstPid;
-        int secondPid;
+        // update the arglist array and split to two part
+        arglist[pipeLocation] = (char *) NULL;
+        char **inputArgs = arglist;
+        char **outputArgs = arglist + pipeLocation + 1;
 
-        char *cat_args[] = {"cat", "scores", NULL, NULL};
-        char *grep_args[] = {"grep", "hello", NULL};
-        char *python[] = {"python", "print_args.py", "h", "omer", NULL};
-        char *echo_string[] = {"/home/okleinfeld/GitProjects/OS_course/hw2/echo_string", "hi", NULL};
-
-        // make a pipe (fds go in pipefd[0] and pipefd[1])
-
-        pipe(pipefd);
-
-        firstPid = fork();
-
-        if (firstPid == 0){
-            // parent gets here and handles "cat scores"
-
-            // replace standard output with output part of pipe
-
-            dup2(pipefd[1], 1);
-
-            // close unused unput half of pipe
-
-            close(pipefd[0]);
-
-            // execute cat
-
-            execvp("/home/okleinfeld/GitProjects/OS_course/hw2/echo_string", echo_string);
+        int status = runPipeProcess(inputArgs, outputArgs);
+        if (status != 1){
+            //TODO:: implement error
         }
-
-        close(pipefd[1]);
-
-        secondPid = fork();
-
-        if (secondPid == 0)
-        {
-            // child gets here and handles "grep Villanova"
-
-            // replace standard input with input part of pipe
-
-            dup2(pipefd[0], 0);
-
-            // close unused hald of pipe
-
-            close(pipefd[1]);
-
-            // execute grep
-
-            execvp("grep", grep_args);
-        }
-        
-        close(pipefd[0]);
-        int status;
-        bool firstFinish = false;
-        bool secondFinish = false;
-        pid_t son;
-        while (firstFinish == false || secondFinish == false){
-
-            son = wait(&status);
-            if (son == firstPid){
-                firstFinish = true;
-            } else if (son == secondPid){
-                secondFinish = true;
-            } else if(son == -1){
-                break;
-            }
-        }
-
     }
 
     else {
@@ -174,20 +115,16 @@ int process_arglist(int count, char** arglist){
         }
 
         if (excStatus == -1){
-//TODO: implement error handling for this case
+            //TODO: implement error handling for this case
         }
     }
-
-
-
     return 1;
-
 }
 
 int prepare(void){;}
 
 int finalize(void){
-    int status = -1;
+    int status;
     while (-1 != wait(&status)) {};
     return 0;
     //TODO: implement wait for all sons to prevent zombies.
@@ -249,42 +186,56 @@ int runProcessMode(bool backgroundRun, char** argsList) {
     }
 }
 
+int runPipeProcess(char** inputArgsList, char** outputArgsList){
 
-int runPipeProcess(int* pipfd, char** argList, int processType){
-    int pid = fork();
-    if (pid < 0 ){
-        //TODO: handle error - return from function and raise error
+    int pipefd[2];
+    int firstPid;
+    int secondPid;
+
+    pipe(pipefd);
+
+    // fork for input part of pipe command
+    firstPid = fork();
+    if (firstPid == 0){
+
+        //redirect stdout fd to write side of pipe and close read side.
+        dup2(pipefd[1], 1);
+        close(pipefd[0]);
+        execvp(inputArgsList[0], inputArgsList);
+    }
+    // close the write side of pipe at parent process - send EOF to pipe and enable reading
+    close(pipefd[1]);
+
+    // fork for output part of pipe command
+    secondPid = fork();
+    if (secondPid == 0)
+    {
+        //redirect stdin fd to read side of pipe and close write side
+        dup2(pipefd[0], 0);
+        close(pipefd[1]);
+        execvp(outputArgsList[0], outputArgsList);
     }
 
-    if (pid == 0){
-        if (processType == 0){
-            // for input son process replace stdout with pipe write side and run program
+//    close(pipefd[0]);
+    // wait for both processes to finish before returning (cannot combine & with |)
+    int status;
+    bool firstFinish = false;
+    bool secondFinish = false;
+    pid_t son;
 
-            close(pipfd[0]);
+    while (firstFinish == false || secondFinish == false){
+        son = wait(&status);
 
-            dup2(pipfd[1], 1);
+        if (son == firstPid){
+            firstFinish = true;
 
+        } else if (son == secondPid){
+            secondFinish = true;
 
-        } else {
-            // for output son process replace stdin with pipe read side and run program
-
-            close(pipfd[1]);
-
-            dup2(pipfd[0], 0);
+        } else if(son == -1){
+            break;
         }
-
-        int s = execvp(argList[0], argList);
     }
-
-    // father process waits for the input to return
-    if (pid > 0){
-
-        close(pipfd[1]);
-        int status;
-        pid_t retPid = waitpid(pid, &status, 0);
-        if (retPid != -1) {
-            //TODO: implement error
-        }
-        return 1;
-    }
+    return 1;
+    //TODO: check for error options
 }
