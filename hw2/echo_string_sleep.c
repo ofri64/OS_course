@@ -11,7 +11,7 @@ int main(int argc, char** argv){
     }
     for (int i = 0; i < 10; i++){
         printf("Your message is %s\n", argv[1]);
-        sleep(2);
+        sleep(5);
     }
 
 }

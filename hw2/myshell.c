@@ -3,9 +3,9 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/wait.h>
-#include <signal.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <signal.h>
 
 // arglist - a list of char* arguments (words) provided by the user
 // it contains count+1 items, where the last item (arglist[count]) and *only* the last is NULL
@@ -25,6 +25,8 @@ int runProcess(char** argsList);
 int runProcessMode(bool backgroundRun, char** argsList);
 
 int runPipeProcess(char** inputArgsList, char** outputArgsList);
+
+void emptySignalHandler(int signum, siginfo_t* info, void* ptr);
 
 
 int main(void)
@@ -105,8 +107,9 @@ int process_arglist(int count, char** arglist){
 
         if (execBackground == 1){
 
-        // remove the "&" from the arguments
+            // remove the "&" from the arguments
             arglist[count-1] = (char*) NULL;
+
             excStatus = runProcessMode(true, arglist);
         }
 
@@ -164,8 +167,8 @@ int runProcess(char** argsList) {
         int execRunStatus = execvp(argsList[0], argsList);
 
         if (execRunStatus == -1) {
-            //TODO: implement error handling for process could not run
-            return -1;
+            printf("Error running program %s\n", strerror(errno));
+            exit(1);
         }
     }
 
@@ -179,14 +182,36 @@ int runProcessMode(bool backgroundRun, char** argsList) {
         return 1;
     }
     else {
+        struct sigaction currentSignalHandler;
+        struct sigaction newSignalHandler;
+
+        // assign the new signal handler with the pointer to the empty handler function
+        memset(&newSignalHandler, 0, sizeof(newSignalHandler));
+        memset(&currentSignalHandler, 0, sizeof(currentSignalHandler));
+        newSignalHandler.sa_sigaction = emptySignalHandler;
+        newSignalHandler.sa_flags = SA_SIGINFO;
+
+        if( 0 != sigaction(SIGINT, &newSignalHandler, &currentSignalHandler) ){
+            //TODO:: handle error
+            printf("error");
+        }
+
         int execFinishStatus = -1;
         pid_t finishPid = waitpid(sonPid, &execFinishStatus, 0);
+
+        //restore handler from before
+
+        if( 0 != sigaction(SIGINT, &currentSignalHandler, NULL) ){
+            //TODO:: handle error
+            printf("error");
+        }
+        
         //TODO: implenment what to do when process already finished (call returns -1)
         return 1;
     }
 }
 
-int runPipeProcess(char** inputArgsList, char** outputArgsList){
+int runPipeProcess(char** inputArgsList, char** outputArgsList) {
 
     int pipefd[2];
     int firstPid;
@@ -194,48 +219,68 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList){
 
     pipe(pipefd);
 
+    int errorInputProcess[1] = {0};
+
     // fork for input part of pipe command
     firstPid = fork();
-    if (firstPid == 0){
+    if (firstPid == 0) {
 
         //redirect stdout fd to write side of pipe and close read side.
+        int originalStdout = dup(1);
         dup2(pipefd[1], 1);
         close(pipefd[0]);
-        execvp(inputArgsList[0], inputArgsList);
+        int status = execvp(inputArgsList[0], inputArgsList);
+        if (status == -1) {
+
+            // undo the redirection - fd 1 will point again to stdout
+            dup2(originalStdout, 1);
+            printf("Error running program %s\n", strerror(errno));
+            *errorInputProcess = 1;
+            exit(1);
+        }
     }
     // close the write side of pipe at parent process - send EOF to pipe and enable reading
     close(pipefd[1]);
 
-    // fork for output part of pipe command
-    secondPid = fork();
-    if (secondPid == 0)
-    {
-        //redirect stdin fd to read side of pipe and close write side
-        dup2(pipefd[0], 0);
-        close(pipefd[1]);
-        execvp(outputArgsList[0], outputArgsList);
+    if (!errorInputProcess) {
+
+        // fork for output part of pipe command
+        secondPid = fork();
+        if (secondPid == 0) {
+
+            //redirect stdin fd to read side of pipe and close write side
+            dup2(pipefd[0], 0);
+            close(pipefd[1]);
+            int status = execvp(outputArgsList[0], outputArgsList);
+            if (status == -1) {
+                printf("Error running program %s\n", strerror(errno));
+                exit(1);
+            }
+        }
     }
 
-//    close(pipefd[0]);
+    close(pipefd[0]);
+
     // wait for both processes to finish before returning (cannot combine & with |)
     int status;
     bool firstFinish = false;
     bool secondFinish = false;
     pid_t son;
 
-    while (firstFinish == false || secondFinish == false){
+    while (firstFinish == false || secondFinish == false) {
         son = wait(&status);
 
-        if (son == firstPid){
+        if (son == firstPid) {
             firstFinish = true;
-
-        } else if (son == secondPid){
+        } else if (son == secondPid) {
             secondFinish = true;
-
-        } else if(son == -1){
+        } else if (son == -1) {
             break;
         }
     }
     return 1;
     //TODO: check for error options
 }
+
+void emptySignalHandler(int signum, siginfo_t* info, void* ptr) {}
+
