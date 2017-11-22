@@ -14,6 +14,7 @@ int process_arglist(int count, char** arglist);
 
 // prepare and finalize calls for initialization and destruction of anything required
 int prepare(void);
+
 int finalize(void);
 
 int execInBackground(int count, char **arglist);
@@ -22,11 +23,13 @@ int pipeArgumentLocation(int count, char **arglist);
 
 int runProcess(char** argsList);
 
-int runProcessMode(bool backgroundRun, char** argsList);
-
 int runPipeProcess(char** inputArgsList, char** outputArgsList);
 
 void emptySignalHandler(int signum, siginfo_t* info, void* ptr);
+
+int assignEmptyHandlerToInterrupt(struct sigaction *currentSignalHandler, struct sigaction *newSignalHandler);
+
+int restoreInterruptHandler(struct sigaction* originalSignalHandle);
 
 
 int main(void)
@@ -84,51 +87,81 @@ int main(void)
 
 
 int process_arglist(int count, char** arglist){
+    
+
     int execBackground = execInBackground(count, arglist);
     int pipeLocation = pipeArgumentLocation(count, arglist);
     //TODO: check for errors from return function - what happens with return value -1
 
+    if (execBackground == 1){
+        // remove the "&" from the arguments
+        arglist[count-1] = (char*) NULL;
 
-    if (pipeLocation > 0) {
-
-        // update the arglist array and split to two part
-        arglist[pipeLocation] = (char *) NULL;
-        char **inputArgs = arglist;
-        char **outputArgs = arglist + pipeLocation + 1;
-
-        int status = runPipeProcess(inputArgs, outputArgs);
-        if (status != 1){
-            //TODO:: implement error
+        pid_t sonPid = runProcess(arglist);
+        if (sonPid == -1){
+            //TODO: some error process didn't run or maybe not needed
         }
+        return 1;
     }
 
-    else {
-        int excStatus;
+    else if(execBackground == 0) {
 
-        if (execBackground == 1){
+        // assign the new signal handler with the pointer to the empty handler function
+        struct sigaction currentSignalHandler;
+        struct sigaction newSignalHandler;
+        memset(&newSignalHandler, 0, sizeof(newSignalHandler));
+        memset(&currentSignalHandler, 0, sizeof(currentSignalHandler));
 
-            // remove the "&" from the arguments
-            arglist[count-1] = (char*) NULL;
-
-            excStatus = runProcessMode(true, arglist);
+        int ret = assignEmptyHandlerToInterrupt(&currentSignalHandler, &newSignalHandler);
+        if (ret == 0) {
+            //TODO: handle error
+            return 1;
         }
 
-        else {
-            excStatus = runProcessMode(false, arglist);
+        if (pipeLocation > 0){
+            // run two process communicating using nameless pipe redirect first output to second's input
+
+            // update the arglist array and split to two part
+            arglist[pipeLocation] = (char *) NULL;
+            char **inputArgs = arglist;
+            char **outputArgs = arglist + pipeLocation + 1;
+
+            int status = runPipeProcess(inputArgs, outputArgs);
+            if (status != 1){
+                //TODO:: implement error
+            }
+        }
+        else{
+            // run a single process and wait for it to end
+            pid_t sonPid = runProcess(arglist);
+            if (sonPid == -1){
+                //TODO:: implement error
+            }
+
+            int execFinishStatus = -1;
+            pid_t finishPid = waitpid(sonPid, &execFinishStatus, 0);
         }
 
-        if (excStatus == -1){
-            //TODO: implement error handling for this case
+        //restore handler from before
+
+        ret = restoreInterruptHandler(&currentSignalHandler);
+        if (ret == 0){
+            //TODO: handle error
         }
+        return 1;
     }
-    return 1;
+
+    else{
+        //TODO: error that should not happen. print error and contiue
+        return 1;
+    }
 }
 
-int prepare(void){;}
+int prepare(void){return 0;}
 
 int finalize(void){
-    int status;
-    while (-1 != wait(&status)) {};
+//    int status;
+//    while (-1 != wait(&status)) {};
     return 0;
     //TODO: implement wait for all sons to prevent zombies.
 }
@@ -153,8 +186,6 @@ int pipeArgumentLocation(int count, char **arglist){
     return 0; // 0 if non pipe found
 }
 
-
-
 int runProcess(char** argsList) {
     pid_t execPid = fork();
 
@@ -174,41 +205,6 @@ int runProcess(char** argsList) {
 
     // only executes in father process
     return execPid;
-}
-
-int runProcessMode(bool backgroundRun, char** argsList) {
-    pid_t sonPid = runProcess(argsList);
-    if (backgroundRun) {
-        return 1;
-    }
-    else {
-        struct sigaction currentSignalHandler;
-        struct sigaction newSignalHandler;
-
-        // assign the new signal handler with the pointer to the empty handler function
-        memset(&newSignalHandler, 0, sizeof(newSignalHandler));
-        memset(&currentSignalHandler, 0, sizeof(currentSignalHandler));
-        newSignalHandler.sa_sigaction = emptySignalHandler;
-        newSignalHandler.sa_flags = SA_SIGINFO;
-
-        if( 0 != sigaction(SIGINT, &newSignalHandler, &currentSignalHandler) ){
-            //TODO:: handle error
-            printf("error");
-        }
-
-        int execFinishStatus = -1;
-        pid_t finishPid = waitpid(sonPid, &execFinishStatus, 0);
-
-        //restore handler from before
-
-        if( 0 != sigaction(SIGINT, &currentSignalHandler, NULL) ){
-            //TODO:: handle error
-            printf("error");
-        }
-        
-        //TODO: implenment what to do when process already finished (call returns -1)
-        return 1;
-    }
 }
 
 int runPipeProcess(char** inputArgsList, char** outputArgsList) {
@@ -242,7 +238,7 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
     // close the write side of pipe at parent process - send EOF to pipe and enable reading
     close(pipefd[1]);
 
-    if (!errorInputProcess) {
+    if (!*errorInputProcess) {
 
         // fork for output part of pipe command
         secondPid = fork();
@@ -284,3 +280,26 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
 
 void emptySignalHandler(int signum, siginfo_t* info, void* ptr) {}
 
+int assignEmptyHandlerToInterrupt(struct sigaction *currentSignalHandler, struct sigaction *newSignalHandler){
+    newSignalHandler->sa_sigaction = emptySignalHandler;
+    newSignalHandler->sa_flags = SA_SIGINFO;
+    if( 0 != sigaction(SIGINT, newSignalHandler, currentSignalHandler) ){
+        //TODO:: handle error
+        printf("error");
+        return 0;
+    }
+    else{
+        return 1;
+    }
+}
+
+int restoreInterruptHandler(struct sigaction* originalSignalHandle){
+    if( 0 != sigaction(SIGINT, originalSignalHandle, NULL) ){
+        //TODO:: handle error
+        printf("error");
+        return 0;
+    }
+    else{
+        return 1;
+    }
+}
