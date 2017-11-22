@@ -40,6 +40,8 @@ int assignEmptyHandlerToInterrupt(struct sigaction *currentSignalHandler, struct
 
 int restoreInterruptHandler(struct sigaction* originalSignalHandle);
 
+int runBackgroundProcess(char** argsList);
+
 
 int main(void)
 {
@@ -113,7 +115,7 @@ int process_arglist(int count, char** arglist){
         // remove the "&" from the arguments
         arglist[count-1] = (char*) NULL;
 
-        runProcess(arglist);
+        runBackgroundProcess(arglist);
         return 1;
     }
 
@@ -206,6 +208,31 @@ int runProcess(char** argsList) {
 
     if (execPid == 0) {
         int execRunStatus = execvp(argsList[0], argsList);
+
+        if (execRunStatus == -1) {
+            printf(ERROR_EXEC_PROG, strerror(errno));
+            exit(1);
+        }
+    }
+
+    // only executes in father process
+    return execPid;
+}
+
+int runBackgroundProcess(char** argsList){
+    pid_t execPid = fork();
+
+    if (execPid == -1) {
+        printf(ERROR_PROCESS_NOT_OPEN, strerror(errno));
+        return -1;
+    }
+
+    if (execPid == 0) {
+
+        signal(SIGINT, SIG_IGN);
+        
+        int execRunStatus = execvp(argsList[0], argsList);
+
 
         if (execRunStatus == -1) {
             printf(ERROR_EXEC_PROG, strerror(errno));
