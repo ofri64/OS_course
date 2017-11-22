@@ -7,6 +7,15 @@
 #include <stdbool.h>
 #include <signal.h>
 
+#define ERROR_EXEC_PROG "Error running program: %s\n"
+#define AMPER_NOT_AT_END "This shell program only supports '&' character at the end of the executing command\n"
+#define WRONG_PIPE_LOC "This shell program does not support using '| operator at the begin or the end of the executing command\n"
+#define UNEXPECT_ERROR "The was an unexpected error. Your specified program could not be executed. Please try again\n"
+#define ERROR_HANDLER_ASSIGN "Error: Could not assign an interrupt handler %s\n"
+#define ERROR_RETURN_ORIG_HANDLER "Error: Could not undo interrupt handler assignment %s\n"
+#define ERROR_PROCESS_NOT_OPEN "Could not open new process %s\n"
+
+
 // arglist - a list of char* arguments (words) provided by the user
 // it contains count+1 items, where the last item (arglist[count]) and *only* the last is NULL
 // RETURNS - 1 if should cotinue, 0 otherwise
@@ -87,20 +96,24 @@ int main(void)
 
 
 int process_arglist(int count, char** arglist){
-    
+    // in case of background process that already finished their run - remove them from zombie status
+    waitpid(-1, NULL, WNOHANG);
 
     int execBackground = execInBackground(count, arglist);
     int pipeLocation = pipeArgumentLocation(count, arglist);
-    //TODO: check for errors from return function - what happens with return value -1
+    //error handling for unsupported inputs
+    if (execBackground == -1){
+        printf(AMPER_NOT_AT_END);
+        return 1; }
+    if (pipeLocation == -1){
+        printf(WRONG_PIPE_LOC);
+        return 1; }
 
     if (execBackground == 1){
         // remove the "&" from the arguments
         arglist[count-1] = (char*) NULL;
 
-        pid_t sonPid = runProcess(arglist);
-        if (sonPid == -1){
-            //TODO: some error process didn't run or maybe not needed
-        }
+        runProcess(arglist);
         return 1;
     }
 
@@ -114,7 +127,6 @@ int process_arglist(int count, char** arglist){
 
         int ret = assignEmptyHandlerToInterrupt(&currentSignalHandler, &newSignalHandler);
         if (ret == 0) {
-            //TODO: handle error
             return 1;
         }
 
@@ -126,45 +138,43 @@ int process_arglist(int count, char** arglist){
             char **inputArgs = arglist;
             char **outputArgs = arglist + pipeLocation + 1;
 
-            int status = runPipeProcess(inputArgs, outputArgs);
-            if (status != 1){
-                //TODO:: implement error
-            }
+            runPipeProcess(inputArgs, outputArgs);
+
         }
         else{
             // run a single process and wait for it to end
             pid_t sonPid = runProcess(arglist);
-            if (sonPid == -1){
-                //TODO:: implement error
+            if (sonPid != -1){
+                int execFinishStatus = -1;
+                waitpid(sonPid, &execFinishStatus, 0);
             }
-
-            int execFinishStatus = -1;
-            pid_t finishPid = waitpid(sonPid, &execFinishStatus, 0);
         }
 
         //restore handler from before
 
         ret = restoreInterruptHandler(&currentSignalHandler);
         if (ret == 0){
-            //TODO: handle error
+            // Not being able to restore the previous SIGINT handler is critical for controlling the program's behaviour
+            // As a consequence the program must be shut down gracfuly
+            return 0;
         }
-        return 1;
+
     }
 
     else{
-        //TODO: error that should not happen. print error and contiue
+        // This error should not happen in any case, if so it is a bug in the program.
+        // print a message to the user and continue the loop
+        printf(UNEXPECT_ERROR);
         return 1;
     }
+
+    //flow ended normally - continue to listen to user's commands
+    return 1;
 }
 
 int prepare(void){return 0;}
 
-int finalize(void){
-//    int status;
-//    while (-1 != wait(&status)) {};
-    return 0;
-    //TODO: implement wait for all sons to prevent zombies.
-}
+int finalize(void){return 0;}
 
 int execInBackground(int count, char** arglist){
     for (int i = 0; i < count; i++){
@@ -190,7 +200,7 @@ int runProcess(char** argsList) {
     pid_t execPid = fork();
 
     if (execPid == -1) {
-        //TODO: implement error handling
+        printf(ERROR_PROCESS_NOT_OPEN, strerror(errno));
         return -1;
     }
 
@@ -198,7 +208,7 @@ int runProcess(char** argsList) {
         int execRunStatus = execvp(argsList[0], argsList);
 
         if (execRunStatus == -1) {
-            printf("Error running program %s\n", strerror(errno));
+            printf(ERROR_EXEC_PROG, strerror(errno));
             exit(1);
         }
     }
@@ -211,11 +221,10 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
 
     int pipefd[2];
     int firstPid;
-    int secondPid;
+    int secondPid = -100;
 
     pipe(pipefd);
 
-    int errorInputProcess[1] = {0};
 
     // fork for input part of pipe command
     firstPid = fork();
@@ -230,28 +239,24 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
 
             // undo the redirection - fd 1 will point again to stdout
             dup2(originalStdout, 1);
-            printf("Error running program %s\n", strerror(errno));
-            *errorInputProcess = 1;
+            printf(ERROR_EXEC_PROG, strerror(errno));
             exit(1);
         }
     }
     // close the write side of pipe at parent process - send EOF to pipe and enable reading
     close(pipefd[1]);
 
-    if (!*errorInputProcess) {
+    // fork for output part of pipe command
+    secondPid = fork();
+    if (secondPid == 0) {
 
-        // fork for output part of pipe command
-        secondPid = fork();
-        if (secondPid == 0) {
-
-            //redirect stdin fd to read side of pipe and close write side
-            dup2(pipefd[0], 0);
-            close(pipefd[1]);
-            int status = execvp(outputArgsList[0], outputArgsList);
-            if (status == -1) {
-                printf("Error running program %s\n", strerror(errno));
-                exit(1);
-            }
+        //redirect stdin fd to read side of pipe and close write side
+        dup2(pipefd[0], 0);
+        close(pipefd[1]);
+        int status = execvp(outputArgsList[0], outputArgsList);
+        if (status == -1) {
+            printf(ERROR_EXEC_PROG, strerror(errno));
+            exit(1);
         }
     }
 
@@ -275,7 +280,6 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
         }
     }
     return 1;
-    //TODO: check for error options
 }
 
 void emptySignalHandler(int signum, siginfo_t* info, void* ptr) {}
@@ -284,8 +288,7 @@ int assignEmptyHandlerToInterrupt(struct sigaction *currentSignalHandler, struct
     newSignalHandler->sa_sigaction = emptySignalHandler;
     newSignalHandler->sa_flags = SA_SIGINFO;
     if( 0 != sigaction(SIGINT, newSignalHandler, currentSignalHandler) ){
-        //TODO:: handle error
-        printf("error");
+        printf(ERROR_HANDLER_ASSIGN, strerror(errno));
         return 0;
     }
     else{
@@ -295,8 +298,8 @@ int assignEmptyHandlerToInterrupt(struct sigaction *currentSignalHandler, struct
 
 int restoreInterruptHandler(struct sigaction* originalSignalHandle){
     if( 0 != sigaction(SIGINT, originalSignalHandle, NULL) ){
-        //TODO:: handle error
-        printf("error");
+        printf(ERROR_RETURN_ORIG_HANDLER, strerror(errno));
+        printf("Program will have to terminate\n");
         return 0;
     }
     else{
