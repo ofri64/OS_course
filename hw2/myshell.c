@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <signal.h>
+#include <sys/prctl.h>
 
 #define ERROR_EXEC_PROG "Error running program: %s\n"
 #define AMPER_NOT_AT_END "This shell program only supports '&' character at the end of the executing command\n"
@@ -41,6 +42,10 @@ int assignEmptyHandlerToInterrupt(struct sigaction *currentSignalHandler, struct
 int restoreInterruptHandler(struct sigaction* originalSignalHandle);
 
 int runBackgroundProcess(char** argsList);
+
+void parentDeathSignalHandler(int signum, siginfo_t* info, void* ptr);
+
+int assignParentDeathHandler(struct sigaction *currentSignalHandler, struct sigaction *newSignalHandler);
 
 
 int main(void)
@@ -98,8 +103,19 @@ int main(void)
 
 
 int process_arglist(int count, char** arglist){
+
     // in case of background process that already finished their run - remove them from zombie status
-    waitpid(-1, NULL, WNOHANG);
+    bool zombiesExists = true;
+    while (zombiesExists){
+        pid_t p = waitpid(-1, NULL, WNOHANG);
+        if (p == -1){
+            zombiesExists = false;
+        }
+        else if (p == 0){
+            // child process is still running
+            break;
+        }
+    }
 
     int execBackground = execInBackground(count, arglist);
     int pipeLocation = pipeArgumentLocation(count, arglist);
@@ -176,7 +192,10 @@ int process_arglist(int count, char** arglist){
 
 int prepare(void){return 0;}
 
-int finalize(void){return 0;}
+int finalize(void){
+    while (-1 != wait(NULL));
+    return 0;
+}
 
 int execInBackground(int count, char** arglist){
     for (int i = 0; i < count; i++){
@@ -229,11 +248,24 @@ int runBackgroundProcess(char** argsList){
 
     if (execPid == 0) {
 
+        // cancel interrupt signal - process won't end if an interrupt signal will send just non background son process
         signal(SIGINT, SIG_IGN);
-        
+
+        // assigns a new user defined signal for parent kill event
+        prctl(PR_SET_PDEATHSIG, SIGUSR1);
+
+        // assign a mathcing signal handler - end background process if shell program (father) is killed
+        struct sigaction currentSignalHandler;
+        struct sigaction newSignalHandler;
+        memset(&newSignalHandler, 0, sizeof(newSignalHandler));
+        memset(&currentSignalHandler, 0, sizeof(currentSignalHandler));
+
+        int ret = assignParentDeathHandler(&currentSignalHandler, &newSignalHandler);
+        if (ret == 0) {
+            return 1;
+        }
+
         int execRunStatus = execvp(argsList[0], argsList);
-
-
         if (execRunStatus == -1) {
             printf(ERROR_EXEC_PROG, strerror(errno));
             exit(1);
@@ -310,6 +342,22 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
 }
 
 void emptySignalHandler(int signum, siginfo_t* info, void* ptr) {}
+
+void parentDeathSignalHandler(int signum, siginfo_t* info, void* ptr){
+    exit(1);
+}
+
+int assignParentDeathHandler(struct sigaction *currentSignalHandler, struct sigaction *newSignalHandler){
+    newSignalHandler->sa_sigaction = parentDeathSignalHandler;
+    newSignalHandler->sa_flags = SA_SIGINFO;
+    if( 0 != sigaction(SIGUSR1, newSignalHandler, currentSignalHandler) ){
+        printf(ERROR_HANDLER_ASSIGN, strerror(errno));
+        return 0;
+    }
+    else{
+        return 1;
+    }
+}
 
 int assignEmptyHandlerToInterrupt(struct sigaction *currentSignalHandler, struct sigaction *newSignalHandler){
     newSignalHandler->sa_sigaction = emptySignalHandler;
