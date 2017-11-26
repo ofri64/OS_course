@@ -35,7 +35,7 @@ int runProcess(char** argsList);
 
 int runPipeProcess(char** inputArgsList, char** outputArgsList);
 
-void emptySignalHandler(int signum, siginfo_t* info, void* ptr);
+static void emptySignalHandler(int signum);
 
 int assignEmptyHandlerToInterrupt(struct sigaction *currentSignalHandler, struct sigaction *newSignalHandler);
 
@@ -82,17 +82,6 @@ int process_arglist(int count, char** arglist){
 
     else if(execBackground == 0) {
 
-        // assign the new signal handler with the pointer to the empty handler function
-        struct sigaction currentSignalHandler;
-        struct sigaction newSignalHandler;
-        memset(&newSignalHandler, 0, sizeof(newSignalHandler));
-        memset(&currentSignalHandler, 0, sizeof(currentSignalHandler));
-
-        int ret = assignEmptyHandlerToInterrupt(&currentSignalHandler, &newSignalHandler);
-        if (ret == 0) {
-            return 1;
-        }
-
         if (pipeLocation > 0){
             // run two process communicating using nameless pipe redirect first output to second's input
 
@@ -113,15 +102,6 @@ int process_arglist(int count, char** arglist){
             }
         }
 
-        //restore handler from before
-
-        ret = restoreInterruptHandler(&currentSignalHandler);
-        if (ret == 0){
-            // Not being able to restore the previous SIGINT handler is critical for controlling the program's behaviour
-            // As a consequence the program must be shut down gracfuly
-            return 0;
-        }
-
     }
 
     else{
@@ -135,7 +115,18 @@ int process_arglist(int count, char** arglist){
     return 1;
 }
 
-int prepare(void){return 0;}
+int prepare(void){
+    struct sigaction sa;
+    sa.sa_handler = emptySignalHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART; /* Restart functions if interrupted by handler */
+    if (sigaction(SIGINT, &sa, NULL) == -1){
+        //TODO: handle error
+        return 1;
+    }
+
+    return 0;
+}
 
 int finalize(void){
     while (-1 != wait(NULL));
@@ -286,7 +277,7 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
     return 1;
 }
 
-void emptySignalHandler(int signum, siginfo_t* info, void* ptr) {}
+static void emptySignalHandler(int signum) {}
 
 void parentDeathSignalHandler(int signum, siginfo_t* info, void* ptr){
     exit(1);
