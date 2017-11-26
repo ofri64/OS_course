@@ -36,6 +36,8 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList);
 
 int runBackgroundProcess(char** argsList);
 
+int assignSignalHandler(bool ignore);
+
 void parentDeathSignalHandler(int signum, siginfo_t* info, void* ptr);
 
 int assignParentDeathHandler(struct sigaction *currentSignalHandler, struct sigaction *newSignalHandler);
@@ -109,12 +111,13 @@ int process_arglist(int count, char** arglist){
 }
 
 int prepare(void){
-    __sighandler_t prevHandle = signal(SIGINT, SIG_IGN);
-    if (prevHandle == SIG_ERR){
-        fprintf(stderr, ERROR_HANDLER_ASSIGN, strerror(errno));
-        return 1; // cannot start shell program if this assignment fails
+
+    int res = assignSignalHandler(true);
+    if (res < 1){
+        return 1;
+    } else{
+        return 0;
     }
-    return 0;
 }
 
 int finalize(void){
@@ -152,9 +155,9 @@ int runProcess(char** argsList) {
 
     if (execPid == 0) {
 
-        __sighandler_t prevHandle = signal(SIGINT, SIG_DFL); // enable interrupt signals for non-background child processes
-        if (prevHandle == SIG_ERR){
-            fprintf(stderr, ERROR_HANDLER_ASSIGN, strerror(errno));
+        int res = assignSignalHandler(false);
+        if (res == -1){
+            perror(ERROR_HANDLER_ASSIGN);
             exit(1);
         }
 
@@ -218,9 +221,9 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
     firstPid = fork();
     if (firstPid == 0) {
 
-        __sighandler_t prevHandle = signal(SIGINT, SIG_DFL); // enable interrupt signals for non-background child processes
-        if (prevHandle == SIG_ERR) {
-            fprintf(stderr, ERROR_HANDLER_ASSIGN, strerror(errno));
+        int res = assignSignalHandler(false);
+        if (res == -1){
+            perror(ERROR_HANDLER_ASSIGN);
             exit(1);
         }
 
@@ -244,9 +247,9 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
     secondPid = fork();
     if (secondPid == 0) {
 
-        __sighandler_t prevHandle = signal(SIGINT, SIG_DFL); // enable interrupt signals for non-background child processes
-        if (prevHandle == SIG_ERR) {
-            fprintf(stderr, ERROR_HANDLER_ASSIGN, strerror(errno));
+        int res = assignSignalHandler(false);
+        if (res == -1){
+            perror(ERROR_HANDLER_ASSIGN);
             exit(1);
         }
 
@@ -297,4 +300,30 @@ int assignParentDeathHandler(struct sigaction *currentSignalHandler, struct siga
     else{
         return 1;
     }
+}
+
+int assignSignalHandler(bool ignore){
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+
+    if (ignore){
+        // Setup the built in ignore signal handler
+        sa.sa_handler = SIG_IGN;
+    } else{
+        // Setup the built in default interrupt signal handler
+        sa.sa_handler = SIG_DFL;
+    }
+
+    // Restart the system call, if at all possible
+    sa.sa_flags = SA_RESTART;
+
+    // Block every signal during the handler
+    sigfillset(&sa.sa_mask);
+
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror(ERROR_HANDLER_ASSIGN);
+        return -1;
+    }
+
+    return 1;
 }
