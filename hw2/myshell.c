@@ -13,7 +13,6 @@
 #define WRONG_PIPE_LOC "This shell program does not support using '| operator at the begin or the end of the executing command\n"
 #define UNEXPECT_ERROR "The was an unexpected error. Your specified program could not be executed. Please try again\n"
 #define ERROR_HANDLER_ASSIGN "Error: Could not assign an interrupt handler %s\n"
-#define ERROR_RETURN_ORIG_HANDLER "Error: Could not undo interrupt handler assignment %s\n"
 #define ERROR_PROCESS_NOT_OPEN "Could not open new process %s\n"
 
 
@@ -34,12 +33,6 @@ int pipeArgumentLocation(int count, char **arglist);
 int runProcess(char** argsList);
 
 int runPipeProcess(char** inputArgsList, char** outputArgsList);
-
-static void emptySignalHandler(int signum);
-
-int assignEmptyHandlerToInterrupt(struct sigaction *currentSignalHandler, struct sigaction *newSignalHandler);
-
-int restoreInterruptHandler(struct sigaction* originalSignalHandle);
 
 int runBackgroundProcess(char** argsList);
 
@@ -66,10 +59,10 @@ int process_arglist(int count, char** arglist){
     int pipeLocation = pipeArgumentLocation(count, arglist);
     //error handling for unsupported inputs
     if (execBackground == -1){
-        printf(AMPER_NOT_AT_END);
+        fprintf(stderr, AMPER_NOT_AT_END);
         return 1; }
     if (pipeLocation == -1){
-        printf(WRONG_PIPE_LOC);
+        fprintf(stderr, WRONG_PIPE_LOC);
         return 1; }
 
     if (execBackground == 1){
@@ -107,7 +100,7 @@ int process_arglist(int count, char** arglist){
     else{
         // This error should not happen in any case, if so it is a bug in the program.
         // print a message to the user and continue the loop
-        printf(UNEXPECT_ERROR);
+        fprintf(stderr, UNEXPECT_ERROR);
         return 1;
     }
 
@@ -116,15 +109,11 @@ int process_arglist(int count, char** arglist){
 }
 
 int prepare(void){
-    struct sigaction sa;
-    sa.sa_handler = emptySignalHandler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART; /* Restart functions if interrupted by handler */
-    if (sigaction(SIGINT, &sa, NULL) == -1){
-        //TODO: handle error
-        return 1;
+    __sighandler_t prevHandle = signal(SIGINT, SIG_IGN);
+    if (prevHandle == SIG_ERR){
+        fprintf(stderr, ERROR_HANDLER_ASSIGN, strerror(errno));
+        return 1; // cannot start shell program if this assignment fails
     }
-
     return 0;
 }
 
@@ -157,15 +146,22 @@ int runProcess(char** argsList) {
     pid_t execPid = fork();
 
     if (execPid == -1) {
-        printf(ERROR_PROCESS_NOT_OPEN, strerror(errno));
+        fprintf(stderr, ERROR_PROCESS_NOT_OPEN, strerror(errno));
         return -1;
     }
 
     if (execPid == 0) {
+
+        __sighandler_t prevHandle = signal(SIGINT, SIG_DFL); // enable interrupt signals for non-background child processes
+        if (prevHandle == SIG_ERR){
+            fprintf(stderr, ERROR_HANDLER_ASSIGN, strerror(errno));
+            exit(1);
+        }
+
         int execRunStatus = execvp(argsList[0], argsList);
 
         if (execRunStatus == -1) {
-            printf(ERROR_EXEC_PROG, strerror(errno));
+            fprintf(stderr, ERROR_EXEC_PROG, strerror(errno));
             exit(1);
         }
     }
@@ -178,14 +174,11 @@ int runBackgroundProcess(char** argsList){
     pid_t execPid = fork();
 
     if (execPid == -1) {
-        printf(ERROR_PROCESS_NOT_OPEN, strerror(errno));
+        fprintf(stderr, ERROR_PROCESS_NOT_OPEN, strerror(errno));
         return -1;
     }
 
     if (execPid == 0) {
-
-        // cancel interrupt signal - process won't end if an interrupt signal will send just non background son process
-        signal(SIGINT, SIG_IGN);
 
         // assigns a new user defined signal for parent kill event
         prctl(PR_SET_PDEATHSIG, SIGUSR1);
@@ -203,7 +196,7 @@ int runBackgroundProcess(char** argsList){
 
         int execRunStatus = execvp(argsList[0], argsList);
         if (execRunStatus == -1) {
-            printf(ERROR_EXEC_PROG, strerror(errno));
+            fprintf(stderr, ERROR_EXEC_PROG, strerror(errno));
             exit(1);
         }
     }
@@ -225,6 +218,12 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
     firstPid = fork();
     if (firstPid == 0) {
 
+        __sighandler_t prevHandle = signal(SIGINT, SIG_DFL); // enable interrupt signals for non-background child processes
+        if (prevHandle == SIG_ERR) {
+            fprintf(stderr, ERROR_HANDLER_ASSIGN, strerror(errno));
+            exit(1);
+        }
+
         //redirect stdout fd to write side of pipe and close read side.
         int originalStdout = dup(1);
         dup2(pipefd[1], 1);
@@ -234,7 +233,7 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
 
             // undo the redirection - fd 1 will point again to stdout
             dup2(originalStdout, 1);
-            printf(ERROR_EXEC_PROG, strerror(errno));
+            fprintf(stderr, ERROR_EXEC_PROG, strerror(errno));
             exit(1);
         }
     }
@@ -245,12 +244,18 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
     secondPid = fork();
     if (secondPid == 0) {
 
+        __sighandler_t prevHandle = signal(SIGINT, SIG_DFL); // enable interrupt signals for non-background child processes
+        if (prevHandle == SIG_ERR) {
+            fprintf(stderr, ERROR_HANDLER_ASSIGN, strerror(errno));
+            exit(1);
+        }
+
         //redirect stdin fd to read side of pipe and close write side
         dup2(pipefd[0], 0);
         close(pipefd[1]);
         int status = execvp(outputArgsList[0], outputArgsList);
         if (status == -1) {
-            printf(ERROR_EXEC_PROG, strerror(errno));
+            fprintf(stderr, ERROR_EXEC_PROG, strerror(errno));
             exit(1);
         }
     }
@@ -277,7 +282,6 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
     return 1;
 }
 
-static void emptySignalHandler(int signum) {}
 
 void parentDeathSignalHandler(int signum, siginfo_t* info, void* ptr){
     exit(1);
@@ -287,30 +291,7 @@ int assignParentDeathHandler(struct sigaction *currentSignalHandler, struct siga
     newSignalHandler->sa_sigaction = parentDeathSignalHandler;
     newSignalHandler->sa_flags = SA_SIGINFO;
     if( 0 != sigaction(SIGUSR1, newSignalHandler, currentSignalHandler) ){
-        printf(ERROR_HANDLER_ASSIGN, strerror(errno));
-        return 0;
-    }
-    else{
-        return 1;
-    }
-}
-
-int assignEmptyHandlerToInterrupt(struct sigaction *currentSignalHandler, struct sigaction *newSignalHandler){
-    newSignalHandler->sa_sigaction = emptySignalHandler;
-    newSignalHandler->sa_flags = SA_SIGINFO;
-    if( 0 != sigaction(SIGINT, newSignalHandler, currentSignalHandler) ){
-        printf(ERROR_HANDLER_ASSIGN, strerror(errno));
-        return 0;
-    }
-    else{
-        return 1;
-    }
-}
-
-int restoreInterruptHandler(struct sigaction* originalSignalHandle){
-    if( 0 != sigaction(SIGINT, originalSignalHandle, NULL) ){
-        printf(ERROR_RETURN_ORIG_HANDLER, strerror(errno));
-        printf("Program will have to terminate\n");
+        fprintf(stderr, ERROR_HANDLER_ASSIGN, strerror(errno));
         return 0;
     }
     else{
