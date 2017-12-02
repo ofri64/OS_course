@@ -1,3 +1,21 @@
+/*
+ * Student Name: Ofri Kleinfeld
+ * Student ID: 302893680
+ *
+ * This file is used to complete the building of a shell program.
+ * The main function of this file is "process_arglist". rest of the functions are helper function.
+ * The flow of the program is quiet simple:
+ * - complete the parsing of the user arguments and check for '&' or '|' characters
+ * - If '&' char is found, run the process in the background
+ * - In any other case run the process in foreground
+ *
+ * - For foreground process:
+ * - If '|' char is found, pipe the two programs from the left and right hand of the pipe
+ * - If not, execute the given program.
+
+
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,7 +24,6 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <signal.h>
-#include <sys/prctl.h>
 
 #define ERROR_EXEC_PROG "Error running program: %s\n"
 #define AMPER_NOT_AT_END "This shell program only supports '&' character at the end of the executing command\n"
@@ -14,17 +31,6 @@
 #define UNEXPECT_ERROR "The was an unexpected error. Your specified program could not be executed. Please try again\n"
 #define ERROR_HANDLER_ASSIGN "Error: Could not assign an interrupt handler %s\n"
 #define ERROR_PROCESS_NOT_OPEN "Could not open new process %s\n"
-
-
-// arglist - a list of char* arguments (words) provided by the user
-// it contains count+1 items, where the last item (arglist[count]) and *only* the last is NULL
-// RETURNS - 1 if should cotinue, 0 otherwise
-int process_arglist(int count, char** arglist);
-
-// prepare and finalize calls for initialization and destruction of anything required
-int prepare(void);
-
-int finalize(void);
 
 int execInBackground(int count, char **arglist);
 
@@ -38,10 +44,6 @@ int runBackgroundProcess(char** argsList);
 
 int assignSignalHandler(bool ignore);
 
-void parentDeathSignalHandler(int signum, siginfo_t* info, void* ptr);
-
-int assignParentDeathHandler(struct sigaction *currentSignalHandler, struct sigaction *newSignalHandler);
-
 int process_arglist(int count, char** arglist){
 
     // in case of background process that already finished their run - remove them from zombie status
@@ -49,6 +51,7 @@ int process_arglist(int count, char** arglist){
     while (zombiesExists){
         pid_t p = waitpid(-1, NULL, WNOHANG);
         if (p == -1){
+            // no waiting child processes at all
             zombiesExists = false;
         }
         else if (p == 0){
@@ -121,12 +124,12 @@ int prepare(void){
 }
 
 int finalize(void){
-    while (-1 != wait(NULL));
     return 0;
 }
 
 int execInBackground(int count, char** arglist){
-    for (int i = 0; i < count; i++){
+    int i;
+    for (i = 0; i < count; i++){
         if (strcmp(arglist[i], "&") == 0){
             if (i == count-1) return 1; // ampersand is last argument
             else return -1; // ampersand as a middle argument (assuming no more than a single pip)
@@ -136,7 +139,8 @@ int execInBackground(int count, char** arglist){
 }
 
 int pipeArgumentLocation(int count, char **arglist){
-    for (int i = 0; i < count; i++){
+    int i;
+    for (i = 0; i < count; i++){
         if (strcmp(arglist[i], "|") == 0){
             if (i == 0 || i == count-1) return -1; //error - pipe in first or last argument
             else return i;
@@ -182,20 +186,6 @@ int runBackgroundProcess(char** argsList){
     }
 
     if (execPid == 0) {
-
-        // assigns a new user defined signal for parent kill event
-        prctl(PR_SET_PDEATHSIG, SIGUSR1);
-
-        // assign a mathcing signal handler - end background process if shell program (father) is killed
-        struct sigaction currentSignalHandler;
-        struct sigaction newSignalHandler;
-        memset(&newSignalHandler, 0, sizeof(newSignalHandler));
-        memset(&currentSignalHandler, 0, sizeof(currentSignalHandler));
-
-        int ret = assignParentDeathHandler(&currentSignalHandler, &newSignalHandler);
-        if (ret == 0) {
-            return 1;
-        }
 
         int execRunStatus = execvp(argsList[0], argsList);
         if (execRunStatus == -1) {
@@ -283,23 +273,6 @@ int runPipeProcess(char** inputArgsList, char** outputArgsList) {
         }
     }
     return 1;
-}
-
-
-void parentDeathSignalHandler(int signum, siginfo_t* info, void* ptr){
-    exit(1);
-}
-
-int assignParentDeathHandler(struct sigaction *currentSignalHandler, struct sigaction *newSignalHandler){
-    newSignalHandler->sa_sigaction = parentDeathSignalHandler;
-    newSignalHandler->sa_flags = SA_SIGINFO;
-    if( 0 != sigaction(SIGUSR1, newSignalHandler, currentSignalHandler) ){
-        fprintf(stderr, ERROR_HANDLER_ASSIGN, strerror(errno));
-        return 0;
-    }
-    else{
-        return 1;
-    }
 }
 
 int assignSignalHandler(bool ignore){
