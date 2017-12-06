@@ -21,5 +21,27 @@
 #define BUF_LEN 128
 #define DEVICE_FILE_NAME "message_slot_dev"
 #define SUCCESS 0
+#define MAX_CHANNELS_FOR_DEVICE 4
+#define MAX_DEVICES_FOR_DRIVER 4
+
+// struct to represent communication channel
+typedef struct channel{
+    unsigned long channelId;
+    int messageExists;
+    int currentMessageLength;
+    char channelBuffer[BUF_LEN];
+} CHANNEL;
+
+// struct to represent a specific device - identified by it's minor number
+typedef struct channel_device{
+    int minor;
+    CHANNEL* channels[MAX_CHANNELS_FOR_DEVICE];
+} CHANNEL_DEVICE;
+
+int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength);
+int read_message_from_channel(CHANNEL* channel, const char* userBuffer, int bufferLength);
+CHANNEL_DEVICE* getDeviceFromMinor(int minor);
+CHANNEL* getChannelFromDevice(CHANNEL_DEVICE*, unsigned long channelId);
+
 
 #endif //OS_COURSE_MESSAGE_SLOT_H
