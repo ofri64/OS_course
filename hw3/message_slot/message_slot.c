@@ -47,7 +47,7 @@ static int device_open( struct inode* inode,
 static int device_release( struct inode* inode,
                            struct file*  file)
 {
-    printk("Invoking device_release(%p,%p)\n", inode, file);
+    printk("Invoking message_device release(%p,%p)\n", inode, file);
 
     return SUCCESS;
 }
@@ -59,6 +59,7 @@ static ssize_t device_read( struct file* file, char __user* buffer, size_t lengt
 
     // read doesnt really do anything (for now)
     printk( "Invocing device_read(%p,%d) operation not supported yet\n", file, (int) length);
+    printk( "But I can show you my argument value: %d\n", arg);
     //invalid argument error
     return -EINVAL;
 }
