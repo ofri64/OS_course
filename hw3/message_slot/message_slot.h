@@ -39,7 +39,7 @@ typedef struct channel_device{
 } CHANNEL_DEVICE;
 
 int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength);
-int read_message_from_channel(CHANNEL* channel, const char* userBuffer, int bufferLength);
+int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLength);
 CHANNEL_DEVICE* getDeviceFromMinor(int minor);
 CHANNEL* getChannelFromDevice(CHANNEL_DEVICE*, unsigned long channelId);
 

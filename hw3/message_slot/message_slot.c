@@ -30,7 +30,7 @@ MODULE_LICENSE("GPL");
 
 // Array to represent all the devices our driver handles (assume now it is constant)
 
-static CHANNEL_DEVICE devices[MAX_DEVICES_FOR_DRIVER];
+static CHANNEL_DEVICE* devices[MAX_DEVICES_FOR_DRIVER];
 
 
 //ioctrl argument
@@ -162,13 +162,15 @@ module_exit(simple_cleanup);
 
 // Search for the device id within the devices in control by this driver - use minor number
 CHANNEL_DEVICE* getDeviceFromMinor(int minor){
-    printk( "Trying to return a device requested using minor num\n");
     CHANNEL_DEVICE* device;
-    device = NULL;
+    CHANNEL_DEVICE* currentDevice;
     int i;
+    device = NULL;
+    printk( "Trying to return a device requested using minor num\n");
     for (i = 0; i < MAX_DEVICES_FOR_DRIVER; ++i){
-        if (devices[i].minor == minor){
-            device = &(devices[i]);
+        currentDevice = devices[i];
+        if (currentDevice != NULL && currentDevice->minor == minor){
+            device = currentDevice;
             break;
         }
     }
@@ -177,12 +179,13 @@ CHANNEL_DEVICE* getDeviceFromMinor(int minor){
 
 // Search for the channel id within the device channels - use channel id
 CHANNEL* getChannelFromDevice(CHANNEL_DEVICE* device, unsigned long channelId){
-    printk( "Trying to return a channel object requested using its id\n");
     CHANNEL* channel;
-    channel = NULL;
+    CHANNEL* currentChannel;
     int i;
+    channel = NULL;
+    printk( "Trying to return a channel object requested using its id\n");
     for (i=0; i < MAX_CHANNELS_FOR_DEVICE; ++i){
-        CHANNEL* currentChannel = device->channels[i];
+        currentChannel = device->channels[i];
         if (currentChannel != NULL && currentChannel->channelId == channelId){
             channel = currentChannel;
             break;
@@ -193,12 +196,11 @@ CHANNEL* getChannelFromDevice(CHANNEL_DEVICE* device, unsigned long channelId){
 
 // Write a message to a channel, return num of bytes written or -1 on error
 int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength){
+    int i;
     printk("Inside the write message to channel helper function\n");
     if (messageLength > BUF_LEN){
         return -1;
     }
-
-    int i;
     for (i=0; i < messageLength; ++i){
         get_user(channel->channelBuffer[i], &message[i]);
     }
@@ -211,19 +213,18 @@ int write_message_to_channel(CHANNEL* channel, const char* message, int messageL
 }
 
 // Read a message from a channel, return num of bytes read from channel or -1 on error
-int read_message_from_channel(CHANNEL* channel, const char* userBuffer, int bufferLength){
+int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLength){
+    int currentMsgLength;
+    int i;
     printk("Inside the read message from channel helper function\n");
     if (channel->messageExists == 0){ //there isn't a message on this channel
         return -1;
     }
-
-    int currentMsgLength;
     currentMsgLength = channel->currentMessageLength;
     if (bufferLength < currentMsgLength){ // user space buffer is too small for the message in channel
         return -1;
     }
 
-    int i;
     for (i=0; i < currentMsgLength; ++i){
         put_user(channel->channelBuffer[i], &userBuffer[i]);
     }
