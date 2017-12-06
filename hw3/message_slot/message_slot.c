@@ -85,7 +85,7 @@ static int device_release( struct inode* inode,
     minor = iminor(inode);
     printk("The minor number of the device to release is: %d\n", minor);
     device = getExistingDeviceFromMinor(minor, &deviceIndex);
-    printk("the device returned address is %d and index in array is %d", (int) device, deviceIndex);
+    printk("the device index returned is %d", deviceIndex);
 
     if (device != NULL){
     // we need to indicate the device is closed - the device is registered
@@ -191,10 +191,10 @@ static void __exit simple_cleanup(void)
     CHANNEL_DEVICE* currentDevice;
     printk( "removing module from kernel! (Cleaning up message_slot module).\n");
     // free all memory allocations
-    for (i=0; i < MAX_DEVICES_FOR_DRIVER; ++i){
+    for (i=0; i < MAX_DEVICES_FOR_DRIVER; i++){
         if (devices[i] != NULL){
             currentDevice = devices[i];
-            for(j=0; j < MAX_CHANNELS_FOR_DEVICE; ++j){
+            for(j=0; j < MAX_CHANNELS_FOR_DEVICE; j++){
                 if (currentDevice->channels[j] != NULL){
                     kfree(currentDevice->channels[j]);
                 }
@@ -231,7 +231,7 @@ CHANNEL_DEVICE* allocateDevice(int minor){
     // update device data
     device->minor = minor;
     device->isOpen = 1;
-    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; ++i){
+    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
         device->channels[i] = NULL;
     }
     printk("Initiated device values\n");
@@ -247,9 +247,11 @@ CHANNEL_DEVICE* getExistingDeviceFromMinor(int minor, int* index){
     device = NULL;
     deviceIndex = -1;
     printk( "Trying to return a device requested using minor num\n");
-    for (i = 0; i < MAX_DEVICES_FOR_DRIVER; ++i){
+    for (i = 0; i < MAX_DEVICES_FOR_DRIVER; i++){
         currentDevice = devices[i];
-        printk( "The address of the current memory is %d\n", (int) devices[i]);
+        if (currentDevice !=NULL){
+            printk("The current device is not null and is minor number is %d\n", currentDevice->minor);
+        }
         if (currentDevice != NULL && currentDevice->minor == minor){
             printk( "Found the device with the minor number within the device at index %d\n", i);
             device = currentDevice;
@@ -268,7 +270,7 @@ CHANNEL* getChannelFromDevice(CHANNEL_DEVICE* device, unsigned long channelId){
     int i;
     channel = NULL;
     printk( "Trying to return a channel object requested using its id\n");
-    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; ++i){
+    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
         currentChannel = device->channels[i];
         if (currentChannel != NULL && currentChannel->channelId == channelId){
             printk( "Found the channel with the id within the device at index %d\n", i);
@@ -284,7 +286,7 @@ int findAvailableDeviceIndex(){
     int index;
     index = -1;
     printk("Looking of an available place to locate a device\n");
-    for (i=0; i < MAX_DEVICES_FOR_DRIVER; ++i){
+    for (i=0; i < MAX_DEVICES_FOR_DRIVER; i++){
         if (devices[i] == NULL){
             index = i;
             printk("Found an available place for device in index %d\n", i);
@@ -300,7 +302,7 @@ int findAvialableChannelIndex(CHANNEL_DEVICE* device){
     int index;
     index = -1;
     printk("Looking of an available place to locate a new channel buffer\n");
-    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; ++i){
+    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
         if (device->channels[i] != NULL){
             index = i;
             printk("Found an available place for channel in index %d\n", i);
@@ -318,7 +320,7 @@ int write_message_to_channel(CHANNEL* channel, const char* message, int messageL
     if (messageLength > BUF_LEN){
         return -1;
     }
-    for (i=0; i < messageLength; ++i){
+    for (i=0; i < messageLength; i++){
         get_user(channel->channelBuffer[i], &message[i]);
     }
 
@@ -342,7 +344,7 @@ int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLeng
         return -1;
     }
 
-    for (i=0; i < currentMsgLength; ++i){
+    for (i=0; i < currentMsgLength; i++){
         put_user(channel->channelBuffer[i], &userBuffer[i]);
     }
 
