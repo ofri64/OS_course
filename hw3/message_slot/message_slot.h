@@ -40,8 +40,9 @@ typedef struct channel_device{
 } CHANNEL_DEVICE;
 
 CHANNEL_DEVICE* getExistingDeviceFromMinor(int minor, int* index);
-CHANNEL* getChannelFromDevice(CHANNEL_DEVICE* device, unsigned long channelId);
+CHANNEL_DEVICE* allocateDevice(int minor);
 int findAvailableDeviceIndex(void);
+CHANNEL* getChannelFromDevice(CHANNEL_DEVICE* device, unsigned long channelId);
 int findAvialableChannelIndex(CHANNEL_DEVICE* device);
 int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength);
 int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLength);
