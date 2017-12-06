@@ -255,6 +255,7 @@ CHANNEL_DEVICE* getExistingDeviceFromMinor(int minor, int* index){
         if (currentDevice != NULL && currentDevice->minor == minor){
             printk( "Found the device with the minor number within the device at index %d\n", i);
             device = currentDevice;
+            deviceIndex = i;
             break;
         }
     }
