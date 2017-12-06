@@ -19,7 +19,7 @@
 #include <linux/fs.h>       /* for register_chrdev */
 #include <asm/uaccess.h>    /* for get_user and put_user */
 #include <linux/string.h>   /* for memset. NOTE - not string.h!*/
-#include <linux/slb.h>      /* for kmalloc and kfree */
+#include <linux/slab.h>      /* for kmalloc and kfree */
 #include <asm/errno.h>      /* for memory and other errors */
 
 MODULE_LICENSE("GPL");
@@ -77,7 +77,7 @@ static int device_release( struct inode* inode,
     device = getDeviceFromMinor(minor);
 
     if (device == NULL){
-        return -EINVAL;
+        return SUCCESS;
     }
 
     printk("Freeing the memory for the device with the minor number: %d\n", minor);
