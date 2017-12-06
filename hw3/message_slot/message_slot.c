@@ -57,11 +57,12 @@ static int device_open( struct inode* inode,
 
         printk("Allocated memory for new device object\n");
         index = findAvailableDeviceIndex();
+        printk("Available index can be found in index %d\n", index);
         if (index == -1){
             printk("Didn't find an available slot to allocate. too many registered devices");
             return -ENOMEM;
         }
-
+        device->isOpen = 1;
         devices[index] = device;
         printk("Created new device data structure, in index %d\n", index);
 
@@ -81,18 +82,13 @@ static int device_release( struct inode* inode,
     minor = iminor(inode);
     printk("The minor number of the device to release is: %d\n", minor);
     device = getExistingDeviceFromMinor(minor, &deviceIndex);
+    printk("the device returned address is %x and index in array is %d", device, deviceIndex);
 
-    if (device == NULL){
-        // no need to free - the device is not registered
-        return SUCCESS;
+    if (device != NULL){
+    // we need to indicate the device is closed - the device is registered
+        device->isOpen = 0;
+        printk("Indicated the device is closed\n", minor);
     }
-
-
-
-    printk("Freeing the memory for the device with the minor number: %d\n", minor);
-    kfree(device);
-    devices[deviceIndex] = NULL;
-
     return SUCCESS;
 }
 
@@ -185,9 +181,26 @@ static int __init simple_init(void){
 //---------------------------------------------------------------
 static void __exit simple_cleanup(void)
 {
-    // Unregister the device
+    // Unregiseter the device
     // Should always succeed
+    int i;
+    int j;
+    CHANNEL_DEVICE* currentDevice;
     printk( "removing module from kernel! (Cleaning up message_slot module).\n");
+    // free all memory allocations
+    for (i=0; i < MAX_DEVICES_FOR_DRIVER; ++i){
+        if (devices[i] != NULL){
+            currentDevice = devices[i];
+            for(j=0; j < MAX_CHANNELS_FOR_DEVICE; ++j){
+                if (currentDevice->channels[j] != NULL){
+                    kfree(currentDevice->channels[j]);
+                }
+            }
+            kfree(currentDevice);
+            printk( "Freed memory associated with device num %d", i);
+        }
+        printk("done with iteration %d", i);
+    }
     unregister_chrdev(MAJOR_NUM, DEVICE_RANGE_NAME);
 }
 
@@ -210,6 +223,7 @@ CHANNEL_DEVICE* getExistingDeviceFromMinor(int minor, int* index){
     printk( "Trying to return a device requested using minor num\n");
     for (i = 0; i < MAX_DEVICES_FOR_DRIVER; ++i){
         currentDevice = devices[i];
+        printk( "The address of the current memory is %x\n", devices[i]);
         if (currentDevice != NULL && currentDevice->minor == minor){
             printk( "Found the device with the minor number within the device at index %d\n", i);
             device = currentDevice;
