@@ -35,6 +35,7 @@ typedef struct channel{
 // struct to represent a specific device - identified by it's minor number
 typedef struct channel_device{
     int minor;
+    int numCurrentChannels;
     CHANNEL* channels[MAX_CHANNELS_FOR_DEVICE];
 } CHANNEL_DEVICE;
 

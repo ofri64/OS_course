@@ -19,6 +19,8 @@
 #include <linux/fs.h>       /* for register_chrdev */
 #include <asm/uaccess.h>    /* for get_user and put_user */
 #include <linux/string.h>   /* for memset. NOTE - not string.h!*/
+#include <linux/slb.h>      /* for kmalloc and kfree */
+#include <asm/errno.h>      /* for memory and other errors */
 
 MODULE_LICENSE("GPL");
 
@@ -29,8 +31,8 @@ MODULE_LICENSE("GPL");
 //static char the_message[BUF_LEN];
 
 // Array to represent all the devices our driver handles (assume now it is constant)
-
 static CHANNEL_DEVICE* devices[MAX_DEVICES_FOR_DRIVER];
+static int lastDeviceIndex = 0;
 
 
 //ioctrl argument
@@ -41,9 +43,24 @@ static int device_open( struct inode* inode,
                         struct file*  file )
 {
     int minor;
+    CHANNEL_DEVICE* device;
     printk("Invoking device_open(%p)\n", file);
     minor = iminor(inode);
-    printk("The minor number of the device is: %d\n", minor);
+    printk("The minor number of the device to open is: %d\n", minor);
+    device = getDeviceFromMinor(minor);
+    if (device == NULL){
+        device = kmalloc(sizeof(CHANNEL_DEVICE), GFP_KERNEL);
+
+        if (device == NULL){
+            return -ENOMEM;
+        }
+
+        printk("Created new device data structure, in index %d\n", lastDeviceIndex);
+        devices[lastDeviceIndex] = device;
+        lastDeviceIndex++;
+
+    }
+
 
     return SUCCESS;
 }
@@ -52,7 +69,19 @@ static int device_open( struct inode* inode,
 static int device_release( struct inode* inode,
                            struct file*  file)
 {
+    int minor;
+    CHANNEL_DEVICE* device;
     printk("Invoking message_device release(%p,%p)\n", inode, file);
+    minor = iminor(inode);
+    printk("The minor number of the device to release is: %d\n", minor);
+    device = getDeviceFromMinor(minor);
+
+    if (device == NULL){
+        return -EINVAL;
+    }
+
+    printk("Freeing the memory for the device with the minor number: %d\n", minor);
+    kfree(device);
 
     return SUCCESS;
 }
@@ -170,6 +199,7 @@ CHANNEL_DEVICE* getDeviceFromMinor(int minor){
     for (i = 0; i < MAX_DEVICES_FOR_DRIVER; ++i){
         currentDevice = devices[i];
         if (currentDevice != NULL && currentDevice->minor == minor){
+            printk( "Found the device with the minor number within the device at index %d\n", i);
             device = currentDevice;
             break;
         }
@@ -187,6 +217,7 @@ CHANNEL* getChannelFromDevice(CHANNEL_DEVICE* device, unsigned long channelId){
     for (i=0; i < MAX_CHANNELS_FOR_DEVICE; ++i){
         currentChannel = device->channels[i];
         if (currentChannel != NULL && currentChannel->channelId == channelId){
+            printk( "Found the channel with the id within the device at index %d\n", i);
             channel = currentChannel;
             break;
         }
