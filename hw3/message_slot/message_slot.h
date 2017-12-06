@@ -35,14 +35,15 @@ typedef struct channel{
 // struct to represent a specific device - identified by it's minor number
 typedef struct channel_device{
     int minor;
-    int numCurrentChannels;
     CHANNEL* channels[MAX_CHANNELS_FOR_DEVICE];
 } CHANNEL_DEVICE;
 
+CHANNEL_DEVICE* getExistingDeviceFromMinor(int minor, int* index);
+CHANNEL* getChannelFromDevice(CHANNEL_DEVICE* device, unsigned long channelId);
+int findAvailableDeviceIndex();
+int findAvialableChannelIndex(CHANNEL_DEVICE* device);
 int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength);
 int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLength);
-CHANNEL_DEVICE* getDeviceFromMinor(int minor);
-CHANNEL* getChannelFromDevice(CHANNEL_DEVICE*, unsigned long channelId);
 
 
 #endif //OS_COURSE_MESSAGE_SLOT_H

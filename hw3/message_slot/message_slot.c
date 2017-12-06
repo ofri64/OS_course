@@ -32,7 +32,6 @@ MODULE_LICENSE("GPL");
 
 // Array to represent all the devices our driver handles (assume now it is constant)
 static CHANNEL_DEVICE* devices[MAX_DEVICES_FOR_DRIVER];
-static int lastDeviceIndex = 0;
 
 
 //ioctrl argument
@@ -44,23 +43,29 @@ static int device_open( struct inode* inode,
 {
     int minor;
     CHANNEL_DEVICE* device;
+    int index;
     printk("Invoking device_open(%p)\n", file);
     minor = iminor(inode);
     printk("The minor number of the device to open is: %d\n", minor);
-    device = getDeviceFromMinor(minor);
-    if (device == NULL){
-        device = kmalloc(sizeof(CHANNEL_DEVICE), GFP_KERNEL);
-
-        if (device == NULL){
+    device = getExistingDeviceFromMinor(minor, &index);
+    if (device == NULL) {
+        // device is not allocated yet allocated;
+        device = (CHANNEL_DEVICE* ) kmalloc(sizeof(CHANNEL_DEVICE), GFP_KERNEL);
+        if (device == NULL) {
             return -ENOMEM;
         }
 
-        printk("Created new device data structure, in index %d\n", lastDeviceIndex);
-        devices[lastDeviceIndex] = device;
-        lastDeviceIndex++;
+        printk("Allocated memory for new device object\n");
+        index = findAvailableDeviceIndex();
+        if (index == -1){
+            printk("Didn't find an available slot to allocate. too many registered devices");
+            return -ENOMEM;
+        }
+
+        devices[index] = device;
+        printk("Created new device data structure, in index %d\n", index);
 
     }
-
 
     return SUCCESS;
 }
@@ -70,18 +75,23 @@ static int device_release( struct inode* inode,
                            struct file*  file)
 {
     int minor;
+    int deviceIndex;
     CHANNEL_DEVICE* device;
     printk("Invoking message_device release(%p,%p)\n", inode, file);
     minor = iminor(inode);
     printk("The minor number of the device to release is: %d\n", minor);
-    device = getDeviceFromMinor(minor);
+    device = getExistingDeviceFromMinor(minor, &deviceIndex);
 
     if (device == NULL){
+        // no need to free - the device is not registered
         return SUCCESS;
     }
 
+
+
     printk("Freeing the memory for the device with the minor number: %d\n", minor);
     kfree(device);
+    devices[deviceIndex] = NULL;
 
     return SUCCESS;
 }
@@ -190,11 +200,13 @@ module_exit(simple_cleanup);
 // Implementing helper function to read, write, search and allocate memory
 
 // Search for the device id within the devices in control by this driver - use minor number
-CHANNEL_DEVICE* getDeviceFromMinor(int minor){
+CHANNEL_DEVICE* getExistingDeviceFromMinor(int minor, int* index){
     CHANNEL_DEVICE* device;
     CHANNEL_DEVICE* currentDevice;
     int i;
+    int deviceIndex;
     device = NULL;
+    deviceIndex = -1;
     printk( "Trying to return a device requested using minor num\n");
     for (i = 0; i < MAX_DEVICES_FOR_DRIVER; ++i){
         currentDevice = devices[i];
@@ -204,6 +216,8 @@ CHANNEL_DEVICE* getDeviceFromMinor(int minor){
             break;
         }
     }
+
+    *index = deviceIndex;
     return device;
 }
 
@@ -263,4 +277,36 @@ int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLeng
     // return number of bytes read
     printk("Read the message %s\n", channel->channelBuffer);
     return i;
+}
+
+int findAvailableDeviceIndex(){
+    int i;
+    int index;
+    index = -1;
+    printk("Looking of an available place to locate a device\n");
+    for (i=0; i < MAX_DEVICES_FOR_DRIVER; ++i){
+        if (devices[i] == NULL){
+            index = i;
+            printk("Found an available place for device in index %d\n", i);
+            break;
+        }
+    }
+
+    return index;
+}
+
+int findAvialableChannelIndex(CHANNEL_DEVICE* device){
+    int i;
+    int index;
+    index = -1;
+    printk("Looking of an available place to locate a new channel buffer\n");
+    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; ++i){
+        if (device->channels[i] != NULL){
+            index = i;
+            printk("Found an available place for channel in index %d\n", i);
+            break;
+        }
+    }
+
+    return index;
 }
