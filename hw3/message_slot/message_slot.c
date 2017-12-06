@@ -59,7 +59,7 @@ static ssize_t device_read( struct file* file, char __user* buffer, size_t lengt
 
     // read doesnt really do anything (for now)
     printk( "Invocing device_read(%p,%d) operation not supported yet\n", file, (int) length);
-    printk( "But I can show you my argument value: %d\n", arg);
+    printk( "But I can show you my argument value: %d\n", (int) arg);
     //invalid argument error
     return -EINVAL;
 }
