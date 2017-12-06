@@ -26,7 +26,7 @@ MODULE_LICENSE("GPL");
 #include "message_slot.h"
 
 // The message the device will give when asked
-static char the_message[BUF_LEN];
+//static char the_message[BUF_LEN];
 
 //ioctrl argument
 static long arg = -1;
@@ -35,8 +35,9 @@ static long arg = -1;
 static int device_open( struct inode* inode,
                         struct file*  file )
 {
+    int minor;
     printk("Invoking device_open(%p)\n", file);
-    int minor = iminor(inode);
+    minor = iminor(inode);
     printk("The minor number of the device is: %d\n", minor);
 
     return SUCCESS;
@@ -57,7 +58,7 @@ static int device_release( struct inode* inode,
 static ssize_t device_read( struct file* file, char __user* buffer, size_t length, loff_t* offset){
 
     // read doesnt really do anything (for now)
-    printk( "Invocing device_read(%p,%d) operation not supported yet\n", file, length);
+    printk( "Invocing device_read(%p,%d) operation not supported yet\n", file, (int) length);
     //invalid argument error
     return -EINVAL;
 }
@@ -66,10 +67,10 @@ static ssize_t device_read( struct file* file, char __user* buffer, size_t lengt
 // a processs which has already opened
 // the device file attempts to write to i
 
-static ssize_t device_write( struct file* file, char __user* buffer, size_t length, loff_t* offset){
+static ssize_t device_write( struct file* file, const char __user* buffer, size_t length, loff_t* offset){
 
     // read doesnt really do anything (for now)
-    printk( "Invocing write(%p,%d) operation not supported yet\n", file, length);
+    printk( "Invocing write(%p,%d) operation not supported yet\n", file, (int) length);
     //invalid argument error
     return -EINVAL;
 }
@@ -89,8 +90,8 @@ static long device_ioctl( struct   file* file,
     }
 
     else{
-        return -EINVAL
-    };
+        return -EINVAL;
+    }
 
 }
 
