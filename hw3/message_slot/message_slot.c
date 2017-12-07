@@ -32,7 +32,7 @@ MODULE_LICENSE("GPL");
 
 // Devices Linked list to represent all the devices our driver handles (assume now it is constant)
 static DEVICE_LINKED_LIST* list;
-static int currentHandledDevice = -1;
+static int currentHandledDevice = 0;
 
 //================== DEVICE FUNCTIONS ===========================
 static int device_open( struct inode* inode,
@@ -121,10 +121,10 @@ static long device_ioctl( struct   file* file,
                           unsigned int   ioctl_command_id,
                           unsigned long  ioctl_param )
 {
-    DEVICE* currentDevice;
-    CHANNEL* currentChannel;
-    CHANNEL_LINKED_LIST* cList;
-    int status;
+//    DEVICE* currentDevice;
+//    CHANNEL* currentChannel;
+//    CHANNEL_LINKED_LIST* cList;
+//    int status;
     // Switch according to the ioctl called
     printk("Entering ioctl command\n");
     if( MSG_SLOT_CHANNEL == ioctl_command_id )
@@ -133,43 +133,46 @@ static long device_ioctl( struct   file* file,
         printk( "Invoking ioctl: associating the channel id given to the file descriptor %ld\n", ioctl_param );
         file->private_data = (void *) ioctl_param;
 
-        // Verify that the channel exists. Crate a new channel if it doesn't
+        printk("the current handled device by the driver is %ld", currentHandledDevice);
 
-        currentDevice = findDeviceFromMinor(list, currentHandledDevice);
-        if (currentDevice == NULL){
-            printk("Wrong ioctl command. the device is not defined yet\n");
-            return -EINVAL;
-        }
-
-        currentChannel = findChannelInDevice(currentDevice, ioctl_param);
-        if (currentChannel != NULL){
-            printk("The channel already exists - ready for read or write operations\n");
-        }
-        else{
-            printk("The channel doesn't exists - trying to allocate a new channel\n");
-
-            if (currentDevice->channels == NULL){ // no channels list at all for device
-                printk("Needs to allocate also channels linked list for the device\n");
-                cList = cretaeEmptyChannelsList();
-                if (cList == NULL){
-                    printk("Channels linked list allocation failed. returning indicating status\n");
-                    return -ENOMEM;
-                }
-            }
-            status = addChannel(currentDevice->channels, ioctl_param);
-            if (status < 0){
-                printk("New channel allocation failed. returning indicating status\n");
-                return -ENOMEM;
-            }
-        }
-
-        return SUCCESS;
+//        // Verify that the channel exists. Crate a new channel if it doesn't
+//
+//        currentDevice = findDeviceFromMinor(list, currentHandledDevice);
+//        if (currentDevice == NULL){
+//            printk("Wrong ioctl command. the device is not defined yet\n");
+//            return -EINVAL;
+//        }
+//
+//        currentChannel = findChannelInDevice(currentDevice, ioctl_param);
+//        if (currentChannel != NULL){
+//            printk("The channel already exists - ready for read or write operations\n");
+//        }
+//        else{
+//            printk("The channel doesn't exists - trying to allocate a new channel\n");
+//
+//            if (currentDevice->channels == NULL){ // no channels list at all for device
+//                printk("Needs to allocate also channels linked list for the device\n");
+//                cList = cretaeEmptyChannelsList();
+//                if (cList == NULL){
+//                    printk("Channels linked list allocation failed. returning indicating status\n");
+//                    return -ENOMEM;
+//                }
+//            }
+//            status = addChannel(currentDevice->channels, ioctl_param);
+//            if (status < 0){
+//                printk("New channel allocation failed. returning indicating status\n");
+//                return -ENOMEM;
+//            }
+//        }
     }
+
 
     else{
         printk("The ioctl command given is not in the right format. error is returned\n");
         return -EINVAL;
     }
+
+    return SUCCESS;
 
 }
 
