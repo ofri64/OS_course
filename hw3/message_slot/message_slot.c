@@ -30,8 +30,8 @@ MODULE_LICENSE("GPL");
 // The message the device will give when asked
 //static char the_message[BUF_LEN];
 
-// Array to represent all the devices our driver handles (assume now it is constant)
-static DEVICE* devices[MAX_DEVICES_FOR_DRIVER];
+// Devices Linked list to represent all the devices our driver handles (assume now it is constant)
+static DEVICE_LINKED_LIST* list;
 
 
 //ioctrl argument
@@ -42,55 +42,54 @@ static int device_open( struct inode* inode,
                         struct file*  file )
 {
     int minor;
+    int status;
     DEVICE* device;
-    int index;
     printk("Invoking device_open(%p)\n", file);
     minor = iminor(inode);
     printk("The minor number of the device to open is: %d\n", minor);
-    device = getExistingDeviceFromMinor(minor, &index);
-    if (device == NULL) {
-        // device is not allocated yet allocated;
-        device = allocateDevice(minor);
-        if (device == NULL) {
-            return -ENOMEM;
-        }
-        index = findAvailableDeviceIndex();
-        printk("Available index for the new can be found in index %d\n", index);
-        if (index == -1){
-            printk("Didn't find an available slot to allocate. too many registered devices");
-            return -ENOMEM;
-        }
-        devices[index] = device;
-        printk("Created new device data structure, in index %d\n", index);
-
-        return SUCCESS;
-
-    } else{
-        // device is already allocated just mark it as open
+    device = findDeviceFromMinor(list, minor);
+    if (device != NULL) {
+        //device is already allocated, just need to open it
         device->isOpen = 1;
-        return SUCCESS;
-
+        printk("The device was found, and marked as open\n");
     }
+    else {
+        printk("The device was not found, trying to create a new device\n");
+        status = addDevice(list, minor);
+        if (status < 0 ) {
+            printk("Didn't managed to add new device. memory error\n");
+            return -ENOMEM;
+        }
 
+        // New device created is already marked as open. no need to mark again
+        printk("Successfully created a new device\n");
+        return SUCCESS;
+    }
 }
 
 //---------------------------------------------------------------
 static int device_release( struct inode* inode,
-                           struct file*  file)
-{
+                           struct file*  file) {
     int minor;
     int deviceIndex;
-    DEVICE* device;
+    DEVICE *device;
     printk("Invoking message_device release(%p,%p)\n", inode, file);
     minor = iminor(inode);
     printk("The minor number of the device to release is: %d\n", minor);
-    device = getExistingDeviceFromMinor(minor, &deviceIndex);
-    printk("the device index returned is %d", deviceIndex);
+    device = findDeviceFromMinor(list, minor);
+    if (device == NULL) {
+        printk("Trying to close the device but could not find such one\n");
+        // trying to close device that doesn't exist. don't do anything
 
-    if (device != NULL){
-    // we need to indicate the device is closed - the device is registered
-        device->isOpen = 0;
-        printk("Indicated that device num %d is closed\n", minor);
+    } else {
+        if (device->isOpen == 0) {
+            // again don't do anything the device is already closed
+            printk("Trying to close the device. the device was found but already closed\n");
+        } else {
+            // we need to indicate the device is closed - the device is registered
+            device->isOpen = 0;
+            printk("Closed the device\n");
+        }
     }
     return SUCCESS;
 }
@@ -140,7 +139,6 @@ static long device_ioctl( struct   file* file,
 }
 
 
-
 //==================== DEVICE SETUP =============================
 
 // This structure will hold the functions to be called
@@ -158,6 +156,7 @@ struct file_operations Fops =
 //---------------------------------------------------------------
 // Initialize the module - Register the character device
 static int __init simple_init(void){
+    DEVICE_LINKED_LIST* dList;
     int rc = -1;
     // Register driver capabilities. Obtain major num
     rc = register_chrdev( MAJOR_NUM, DEVICE_RANGE_NAME, &Fops );
@@ -165,9 +164,17 @@ static int __init simple_init(void){
     // Negative values signify an error
     if( rc < 0 )
     {
-        printk( KERN_ALERT "%s registration failed for  %d\n", DEVICE_FILE_NAME, MAJOR_NUM);
+        printk( KERN_ALERT "%s registration failed for %d\n", DEVICE_FILE_NAME, MAJOR_NUM);
         return rc;
     }
+
+    dList = createEmptyDeviceList();
+    if (dList == NULL){
+        printk( KERN_ALERT "%s registration failed for %d, memory allocation error\n", DEVICE_FILE_NAME, MAJOR_NUM);
+        return -1;
+    }
+
+    list = dList;
 
     printk(KERN_INFO "message_slot: registered major number %d\n", MAJOR_NUM);
     printk( "Registeration is successful. ");
@@ -186,24 +193,10 @@ static void __exit simple_cleanup(void)
 {
     // Unregiseter the device
     // Should always succeed
-    int i;
-    int j;
-    DEVICE* currentDevice;
     printk( "removing module from kernel! (Cleaning up message_slot module).\n");
     // free all memory allocations
-    for (i=0; i < MAX_DEVICES_FOR_DRIVER; i++){
-        if (devices[i] != NULL){
-            currentDevice = devices[i];
-            for(j=0; j < MAX_CHANNELS_FOR_DEVICE; j++){
-                if (currentDevice->channels[j] != NULL){
-                    kfree(currentDevice->channels[j]);
-                }
-            }
-            kfree(currentDevice);
-            printk( "Freed memory associated with device num %d", i);
-        }
-        printk("done with iteration %d", i);
-    }
+    destroyDeviceLinkedList(list);
+    printk( "Remove all memory allocations.\n");
     unregister_chrdev(MAJOR_NUM, DEVICE_RANGE_NAME);
 }
 
@@ -418,146 +411,44 @@ int addDevice(DEVICE_LINKED_LIST* dList, int minor){
 }
 
 DEVICE* findDeviceFromMinor(DEVICE_LINKED_LIST* dList, int minor){
-    printk("Searching for device with minor %d\n", minor);
     DEVICE* device;
     DEVICE_NODE* current;
     device = NULL;
     current = dList->head;
+    printk("Searching for device with minor %d\n", minor);
 
     while (current != NULL){
         if (current->device->minor == minor){
+            printk("Found the searched device\n");
             device = current->device;
             break;
         }
+        current = current->next;
     }
+    printk("Didn't find the searched device, returning NULL\n");
     return device;
 }
 
+CHANNEL* findChannelInDevice(DEVICE* device, unsigned long channelId){
+    CHANNEL* channel;
+    CHANNEL_NODE* current;
+    channel = NULL;
+    current = device->channels->head;
+    printk("Searching for channel with id %d in device %d\n", channelId, device->minor);
+
+    while (current != NULL){
+        if (current->dataChannel->channelId == channelId){
+            printk("Found the searched channel\n");
+            channel = current->dataChannel;
+            break;
+        }
+        current = current->next;
+    }
+    printk("Didn't find the searched channel, returning NULL\n");
+    return channel;
+}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Allocate memory and initialize device object
-
-//DEVICE* allocateDevice(int minor){
-//    DEVICE* device;
-//    int i;
-//    printk("Trying to allocated memory for new device object\n");
-//    device = (DEVICE* ) kmalloc(sizeof(DEVICE), GFP_KERNEL);
-//    if (device == NULL) {
-//        return NULL;
-//    }
-//
-//    printk("Allocated memory successfully\n");
-//    // update device data
-//    device->minor = minor;
-//    device->isOpen = 1;
-//    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
-//        device->channels[i] = NULL;
-//    }
-//    printk("Initiated device values\n");
-//    return device;
-//}
-//
-//// Search for the device id within the devices in control by this driver - use minor number
-//DEVICE* getExistingDeviceFromMinor(int minor, int* index){
-//    DEVICE* device;
-//    DEVICE* currentDevice;
-//    int i;
-//    int deviceIndex;
-//    device = NULL;
-//    deviceIndex = -1;
-//    printk( "Trying to return a device requested using minor num\n");
-//    for (i = 0; i < MAX_DEVICES_FOR_DRIVER; i++){
-//        currentDevice = devices[i];
-//        if (currentDevice !=NULL){
-//            printk("The current device is not null and is minor number is %d\n", currentDevice->minor);
-//        }
-//        if (currentDevice != NULL && currentDevice->minor == minor){
-//            printk( "Found the device with the minor number within the device at index %d\n", i);
-//            device = currentDevice;
-//            deviceIndex = i;
-//            break;
-//        }
-//    }
-//
-//    *index = deviceIndex;
-//    return device;
-//}
-//
-//// Search for the channel id within the device channels - use channel id
-//CHANNEL* getChannelFromDevice(DEVICE* device, unsigned long channelId){
-//    CHANNEL* channel;
-//    CHANNEL* currentChannel;
-//    int i;
-//    channel = NULL;
-//    printk( "Trying to return a channel object requested using its id\n");
-//    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
-//        currentChannel = device->channels[i];
-//        if (currentChannel != NULL && currentChannel->channelId == channelId){
-//            printk( "Found the channel with the id within the device at index %d\n", i);
-//            channel = currentChannel;
-//            break;
-//        }
-//    }
-//    return channel;
-//}
-//
-//int findAvailableDeviceIndex(){
-//    int i;
-//    int index;
-//    index = -1;
-//    printk("Looking of an available place to locate a device\n");
-//    for (i=0; i < MAX_DEVICES_FOR_DRIVER; i++){
-//        if (devices[i] == NULL){
-//            index = i;
-//            printk("Found an available place for device in index %d\n", i);
-//            break;
-//        }
-//    }
-//
-//    return index;
-//}
-//
-//int findAvialableChannelIndex(DEVICE* device){
-//    int i;
-//    int index;
-//    index = -1;
-//    printk("Looking of an available place to locate a new channel buffer\n");
-//    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
-//        if (device->channels[i] != NULL){
-//            index = i;
-//            printk("Found an available place for channel in index %d\n", i);
-//            break;
-//        }
-//    }
-//
-//    return index;
-//}
-//
 //// Write a message to a channel, return num of bytes written or -1 on error
 //int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength){
 //    int i;

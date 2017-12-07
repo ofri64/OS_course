@@ -78,12 +78,6 @@ int addDevice(DEVICE_LINKED_LIST* dList, int minor);
 DEVICE* findDeviceFromMinor(DEVICE_LINKED_LIST* dList, int minor);
 CHANNEL* findChannelInDevice(DEVICE* device, unsigned long channelId);
 
-
-//DEVICE* getExistingDeviceFromMinor(int minor, int* index);
-//DEVICE* allocateDevice(int minor);
-//int findAvailableDeviceIndex(void);
-//CHANNEL* getChannelFromDevice(DEVICE* device, unsigned long channelId);
-//int findAvialableChannelIndex(DEVICE* device);
 //int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength);
 //int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLength);
 
