@@ -63,8 +63,8 @@ static int device_open( struct inode* inode,
 
         // New device created is already marked as open. no need to mark again
         printk("Successfully created a new device\n");
-        return SUCCESS;
     }
+    return SUCCESS;
 }
 
 //---------------------------------------------------------------
@@ -277,6 +277,7 @@ CHANNEL_LINKED_LIST* cretaeEmptyChannelsList(){
 
     printk("Allocation Successfully for Channels List\n");
     cList->head = NULL;
+    return cList;
 }
 
 DEVICE_LINKED_LIST* createEmptyDeviceList(){
@@ -289,6 +290,7 @@ DEVICE_LINKED_LIST* createEmptyDeviceList(){
 
     printk("Allocation Successfully for Devices List\n");
     dList->head = NULL;
+    return dList;
 }
 
 void destroyChannel(CHANNEL* channel){
