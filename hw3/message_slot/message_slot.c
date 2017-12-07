@@ -33,10 +33,6 @@ MODULE_LICENSE("GPL");
 // Devices Linked list to represent all the devices our driver handles (assume now it is constant)
 static DEVICE_LINKED_LIST* list;
 
-
-//ioctrl argument
-static long arg = -1;
-
 //================== DEVICE FUNCTIONS ===========================
 static int device_open( struct inode* inode,
                         struct file*  file )
@@ -100,7 +96,7 @@ static ssize_t device_read( struct file* file, char __user* buffer, size_t lengt
 
     // read doesnt really do anything (for now)
     printk( "Invocing device_read(%p,%d) operation not supported yet\n", file, (int) length);
-    printk( "But I can show you my argument value: %d\n", (int) arg);
+    printk( "But I can show you the value associated with the fd value: %d\n", (int) file->private_data);
     //invalid argument error
     return -EINVAL;
 }
@@ -123,15 +119,17 @@ static long device_ioctl( struct   file* file,
                           unsigned long  ioctl_param )
 {
     // Switch according to the ioctl called
+    printk("Entering ioctl command\n");
     if( MSG_SLOT_CHANNEL == ioctl_command_id )
     {
         // Get the parameter given to ioctl by the process
-        printk( "Invoking ioctl: setting arg to %ld\n", ioctl_param );
-        arg = ioctl_param;
+        printk( "Invoking ioctl: associating the channel id given to the file descriptor %ld\n", ioctl_param );
+        file->privet_date = (void *) ioctl_param;
         return SUCCESS;
     }
 
     else{
+        printk("The ioctl command given is not in the right format. error is returned\n");
         return -EINVAL;
     }
 
@@ -195,7 +193,7 @@ static void __exit simple_cleanup(void)
     printk( "removing module from kernel! (Cleaning up message_slot module).\n");
     // free all memory allocations
     destroyDeviceLinkedList(list);
-    printk( "Remove all memory allocations.\n");
+    printk( "Removed all memory allocations of the module.\n");
     unregister_chrdev(MAJOR_NUM, DEVICE_RANGE_NAME);
 }
 
@@ -388,7 +386,7 @@ int addDevice(DEVICE_LINKED_LIST* dList, int minor){
     DEVICE* device;
     DEVICE_NODE* newDeviceNode;
     DEVICE_NODE* currentNode;
-    printk("Adding new channel with minor number %d to device linked list\n", minor);
+    printk("Adding new device with minor number %d to device linked list\n", minor);
     device = createDevice(minor);
 
     if (device == NULL){
@@ -432,7 +430,6 @@ DEVICE* findDeviceFromMinor(DEVICE_LINKED_LIST* dList, int minor){
         }
         currentNode = currentNode->next;
     }
-    printk("Didn't find the searched device, returning NULL\n");
     return device;
 }
 
