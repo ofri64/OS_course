@@ -71,7 +71,6 @@ static int device_open( struct inode* inode,
 static int device_release( struct inode* inode,
                            struct file*  file) {
     int minor;
-    int deviceIndex;
     DEVICE *device;
     printk("Invoking message_device release(%p,%p)\n", inode, file);
     minor = iminor(inode);
@@ -210,8 +209,9 @@ module_exit(simple_cleanup);
 
 
 CHANNEL* createChannel(unsigned long channelId){
-    printk("Creating new channel with id %d\n", channelId);
-    CHANNEL* channel = (CHANNEL* ) kmalloc(sizeof(CHANNEL), GFP_KERNEL);
+    CHANNEL* channel;
+    printk("Creating new channel with id %d\n", (int) channelId);
+    channel = (CHANNEL* ) kmalloc(sizeof(CHANNEL), GFP_KERNEL);
     if (channel == NULL){
         return NULL;
     }
@@ -224,8 +224,9 @@ CHANNEL* createChannel(unsigned long channelId){
 }
 
 CHANNEL_NODE* createChannelNode(CHANNEL* channel){
-    printk("Creating new node associated with channel with id  %d\n", channel->channelId);
-    CHANNEL_NODE* cNode = (CHANNEL_NODE*) kmalloc(sizeof(CHANNEL_NODE), GFP_KERNEL);
+    CHANNEL_NODE* cNode;
+    printk("Creating new node associated with channel with id  %d\n", (int) channel->channelId);
+    cNode = (CHANNEL_NODE*) kmalloc(sizeof(CHANNEL_NODE), GFP_KERNEL);
     if (cNode == NULL){
         return NULL;
     }
@@ -237,8 +238,9 @@ CHANNEL_NODE* createChannelNode(CHANNEL* channel){
 }
 
 DEVICE* createDevice(int minor){
+    DEVICE* device;
     printk("Creating new device with minor number %d\n", minor);
-    DEVICE* device = (DEVICE*) kmalloc(sizeof(DEVICE), GFP_KERNEL);
+    device = (DEVICE*) kmalloc(sizeof(DEVICE), GFP_KERNEL);
     if (device == NULL){
         return NULL;
     }
@@ -251,8 +253,9 @@ DEVICE* createDevice(int minor){
 }
 
 DEVICE_NODE* createDeviceNode(DEVICE* device){
+    DEVICE_NODE* dNode;
     printk("Creating new node associated with device with minor  %d\n", device->minor);
-    DEVICE_NODE* dNode = (DEVICE_NODE*) kmalloc(sizeof(DEVICE_NODE), GFP_KERNEL);
+    dNode = (DEVICE_NODE*) kmalloc(sizeof(DEVICE_NODE), GFP_KERNEL);
     if (dNode == NULL){
         return NULL;
     }
@@ -265,8 +268,9 @@ DEVICE_NODE* createDeviceNode(DEVICE* device){
 
 
 CHANNEL_LINKED_LIST* cretaeEmptyChannelsList(){
+    CHANNEL_LINKED_LIST* cList;
     printk("Creating new empty channels list\n");
-    CHANNEL_LINKED_LIST* cList = (CHANNEL_LINKED_LIST* ) kmalloc(sizeof(CHANNEL_LINKED_LIST), GFP_KERNEL);
+    cList = (CHANNEL_LINKED_LIST* ) kmalloc(sizeof(CHANNEL_LINKED_LIST), GFP_KERNEL);
     if (cList == NULL){
         return NULL;
     }
@@ -276,8 +280,9 @@ CHANNEL_LINKED_LIST* cretaeEmptyChannelsList(){
 }
 
 DEVICE_LINKED_LIST* createEmptyDeviceList(){
+    DEVICE_LINKED_LIST* dList;
     printk("Creating new empty devices list\n");
-    DEVICE_LINKED_LIST* dList = (DEVICE_LINKED_LIST* ) kmalloc(sizeof(DEVICE_LINKED_LIST), GFP_KERNEL);
+    dList = (DEVICE_LINKED_LIST* ) kmalloc(sizeof(DEVICE_LINKED_LIST), GFP_KERNEL);
     if (dList == NULL){
         return NULL;
     }
@@ -288,28 +293,28 @@ DEVICE_LINKED_LIST* createEmptyDeviceList(){
 
 void destroyChannel(CHANNEL* channel){
     if (channel != NULL) {
-        printk("Destroying channel with id %d\n", channel->channelId);
+        printk("Destroying channel with id %d\n", (int) channel->channelId);
         kfree(channel);
     }
 }
 
 void destroyChannelNode(CHANNEL_NODE* cNode){
     if (cNode != NULL){
-        printk("Destroying channel node associated with channel id %d\n", cNode->dataChannel->channelId);
+        printk("Destroying channel node associated with channel id %d\n", (int) cNode->dataChannel->channelId);
         destroyChannel(cNode->dataChannel);
         kfree(cNode);
     }
 }
 
 void destroyChannelLinkedList(CHANNEL_LINKED_LIST* cList){
-    CHANNEL_NODE* current;
+    CHANNEL_NODE* currentNode;
     CHANNEL_NODE* tmp;
     if (cList != NULL){
         printk("Destroying channels List\n");
-        current = cList->head;
-        while (current != NULL){
-            tmp = current;
-            current = current->next;
+        currentNode = cList->head;
+        while (currentNode != NULL){
+            tmp = currentNode;
+            currentNode = currentNode->next;
             destroyChannelNode(tmp);
         }
     }
@@ -332,14 +337,14 @@ void destroyDeviceNode(DEVICE_NODE* dNode){
 }
 
 void destroyDeviceLinkedList(DEVICE_LINKED_LIST* dList){
-    DEVICE_NODE* current;
+    DEVICE_NODE* currentNode;
     DEVICE_NODE* tmp;
     if (dList != NULL){
         printk("Destroying devices List\n");
-        current = dList->head;
-        while (current != NULL){
-            tmp = current;
-            current = current->next;
+        currentNode = dList->head;
+        while (currentNode != NULL){
+            tmp = currentNode;
+            currentNode = currentNode->next;
             destroyDeviceNode(tmp);
         }
     }
@@ -349,7 +354,7 @@ int addChannel(CHANNEL_LINKED_LIST* cList, unsigned long channelId){
     CHANNEL* channel;
     CHANNEL_NODE* newChannelNode;
     CHANNEL_NODE* currentNode;
-    printk("Adding new channel with id %d to channel linked list\n", channelId);
+    printk("Adding new channel with id %d to channel linked list\n", (int) channelId);
     channel = createChannel(channelId);
 
     if (channel == NULL){
@@ -412,18 +417,18 @@ int addDevice(DEVICE_LINKED_LIST* dList, int minor){
 
 DEVICE* findDeviceFromMinor(DEVICE_LINKED_LIST* dList, int minor){
     DEVICE* device;
-    DEVICE_NODE* current;
+    DEVICE_NODE* currentNode;
     device = NULL;
-    current = dList->head;
+    currentNode = dList->head;
     printk("Searching for device with minor %d\n", minor);
 
-    while (current != NULL){
-        if (current->device->minor == minor){
+    while (currentNode != NULL){
+        if (currentNode->device->minor == minor){
             printk("Found the searched device\n");
-            device = current->device;
+            device = currentNode->device;
             break;
         }
-        current = current->next;
+        currentNode = currentNode->next;
     }
     printk("Didn't find the searched device, returning NULL\n");
     return device;
@@ -431,18 +436,18 @@ DEVICE* findDeviceFromMinor(DEVICE_LINKED_LIST* dList, int minor){
 
 CHANNEL* findChannelInDevice(DEVICE* device, unsigned long channelId){
     CHANNEL* channel;
-    CHANNEL_NODE* current;
+    CHANNEL_NODE* currentNode;
     channel = NULL;
-    current = device->channels->head;
-    printk("Searching for channel with id %d in device %d\n", channelId, device->minor);
+    currentNode = device->channels->head;
+    printk("Searching for channel with id %d in device %d\n", (int) channelId, device->minor);
 
-    while (current != NULL){
-        if (current->dataChannel->channelId == channelId){
+    while (currentNode != NULL){
+        if (currentNode->dataChannel->channelId == channelId){
             printk("Found the searched channel\n");
-            channel = current->dataChannel;
+            channel = currentNode->dataChannel;
             break;
         }
-        current = current->next;
+        currentNode = currentNode->next;
     }
     printk("Didn't find the searched channel, returning NULL\n");
     return channel;

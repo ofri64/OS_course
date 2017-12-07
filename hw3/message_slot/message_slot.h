@@ -63,8 +63,8 @@ CHANNEL* createChannel(unsigned long channelId);
 CHANNEL_NODE* createChannelNode(CHANNEL* channel);
 DEVICE* createDevice(int minor);
 DEVICE_NODE* createDeviceNode(DEVICE* device);
-CHANNEL_LINKED_LIST* cretaeEmptyChannelsList();
-DEVICE_LINKED_LIST* createEmptyDeviceList();
+CHANNEL_LINKED_LIST* cretaeEmptyChannelsList(void);
+DEVICE_LINKED_LIST* createEmptyDeviceList(void);
 
 void destroyChannel(CHANNEL*);
 void destroyChannelNode(CHANNEL_NODE*);
