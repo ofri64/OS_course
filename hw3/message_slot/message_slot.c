@@ -31,7 +31,7 @@ MODULE_LICENSE("GPL");
 //static char the_message[BUF_LEN];
 
 // Array to represent all the devices our driver handles (assume now it is constant)
-static CHANNEL_DEVICE* devices[MAX_DEVICES_FOR_DRIVER];
+static DEVICE* devices[MAX_DEVICES_FOR_DRIVER];
 
 
 //ioctrl argument
@@ -42,7 +42,7 @@ static int device_open( struct inode* inode,
                         struct file*  file )
 {
     int minor;
-    CHANNEL_DEVICE* device;
+    DEVICE* device;
     int index;
     printk("Invoking device_open(%p)\n", file);
     minor = iminor(inode);
@@ -80,7 +80,7 @@ static int device_release( struct inode* inode,
 {
     int minor;
     int deviceIndex;
-    CHANNEL_DEVICE* device;
+    DEVICE* device;
     printk("Invoking message_device release(%p,%p)\n", inode, file);
     minor = iminor(inode);
     printk("The minor number of the device to release is: %d\n", minor);
@@ -188,7 +188,7 @@ static void __exit simple_cleanup(void)
     // Should always succeed
     int i;
     int j;
-    CHANNEL_DEVICE* currentDevice;
+    DEVICE* currentDevice;
     printk( "removing module from kernel! (Cleaning up message_slot module).\n");
     // free all memory allocations
     for (i=0; i < MAX_DEVICES_FOR_DRIVER; i++){
@@ -216,140 +216,384 @@ module_exit(simple_cleanup);
 // Implementing helper function to read, write, search and allocate memory
 
 
-// Allocate memory and initialize device object
-
-CHANNEL_DEVICE* allocateDevice(int minor){
-    CHANNEL_DEVICE* device;
-    int i;
-    printk("Trying to allocated memory for new device object\n");
-    device = (CHANNEL_DEVICE* ) kmalloc(sizeof(CHANNEL_DEVICE), GFP_KERNEL);
-    if (device == NULL) {
+CHANNEL* createChannel(unsigned long channelId){
+    printk("Creating new channel with id %d\n", channelId);
+    CHANNEL* channel = (CHANNEL* ) kmalloc(sizeof(CHANNEL), GFP_KERNEL);
+    if (channel == NULL){
         return NULL;
     }
 
-    printk("Allocated memory successfully\n");
-    // update device data
-    device->minor = minor;
-    device->isOpen = 1;
-    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
-        device->channels[i] = NULL;
-    }
-    printk("Initiated device values\n");
-    return device;
-}
-
-// Search for the device id within the devices in control by this driver - use minor number
-CHANNEL_DEVICE* getExistingDeviceFromMinor(int minor, int* index){
-    CHANNEL_DEVICE* device;
-    CHANNEL_DEVICE* currentDevice;
-    int i;
-    int deviceIndex;
-    device = NULL;
-    deviceIndex = -1;
-    printk( "Trying to return a device requested using minor num\n");
-    for (i = 0; i < MAX_DEVICES_FOR_DRIVER; i++){
-        currentDevice = devices[i];
-        if (currentDevice !=NULL){
-            printk("The current device is not null and is minor number is %d\n", currentDevice->minor);
-        }
-        if (currentDevice != NULL && currentDevice->minor == minor){
-            printk( "Found the device with the minor number within the device at index %d\n", i);
-            device = currentDevice;
-            deviceIndex = i;
-            break;
-        }
-    }
-
-    *index = deviceIndex;
-    return device;
-}
-
-// Search for the channel id within the device channels - use channel id
-CHANNEL* getChannelFromDevice(CHANNEL_DEVICE* device, unsigned long channelId){
-    CHANNEL* channel;
-    CHANNEL* currentChannel;
-    int i;
-    channel = NULL;
-    printk( "Trying to return a channel object requested using its id\n");
-    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
-        currentChannel = device->channels[i];
-        if (currentChannel != NULL && currentChannel->channelId == channelId){
-            printk( "Found the channel with the id within the device at index %d\n", i);
-            channel = currentChannel;
-            break;
-        }
-    }
+    printk("Allocation Successfully for Channel\n");
+    channel->channelId = channelId;
+    channel->messageExists = 0;
+    channel->currentMessageLength = 0;
     return channel;
 }
 
-int findAvailableDeviceIndex(){
-    int i;
-    int index;
-    index = -1;
-    printk("Looking of an available place to locate a device\n");
-    for (i=0; i < MAX_DEVICES_FOR_DRIVER; i++){
-        if (devices[i] == NULL){
-            index = i;
-            printk("Found an available place for device in index %d\n", i);
+CHANNEL_NODE* createChannelNode(CHANNEL* channel){
+    printk("Creating new node associated with channel with id  %d\n", channel->channelId);
+    CHANNEL_NODE* cNode = (CHANNEL_NODE*) kmalloc(sizeof(CHANNEL_NODE), GFP_KERNEL);
+    if (cNode == NULL){
+        return NULL;
+    }
+
+    printk("Allocation Successfully for Channel Node\n");
+    cNode->dataChannel = channel;
+    cNode->next = NULL;
+    return cNode;
+}
+
+DEVICE* createDevice(int minor){
+    printk("Creating new device with minor number %d\n", minor);
+    DEVICE* device = (DEVICE*) kmalloc(sizeof(DEVICE), GFP_KERNEL);
+    if (device == NULL){
+        return NULL;
+    }
+
+    printk("Allocation Successfully for Device\n");
+    device->minor = minor;
+    device->isOpen = 1;
+    device->channels = NULL;
+    return device;
+}
+
+DEVICE_NODE* createDeviceNode(DEVICE* device){
+    printk("Creating new node associated with device with minor  %d\n", device->minor);
+    DEVICE_NODE* dNode = (DEVICE_NODE*) kmalloc(sizeof(DEVICE_NODE), GFP_KERNEL);
+    if (dNode == NULL){
+        return NULL;
+    }
+
+    printk("Allocation Successfully for Device Node\n");
+    dNode->device = device;
+    dNode->next = NULL;
+    return dNode;
+}
+
+
+CHANNEL_LINKED_LIST* cretaeEmptyChannelsList(){
+    printk("Creating new empty channels list\n");
+    CHANNEL_LINKED_LIST* cList = (CHANNEL_LINKED_LIST* ) kmalloc(sizeof(CHANNEL_LINKED_LIST), GFP_KERNEL);
+    if (cList == NULL){
+        return NULL;
+    }
+
+    printk("Allocation Successfully for Channels List\n");
+    cList->head = NULL;
+}
+
+DEVICE_LINKED_LIST* createEmptyDeviceList(){
+    printk("Creating new empty devices list\n");
+    DEVICE_LINKED_LIST* dList = (DEVICE_LINKED_LIST* ) kmalloc(sizeof(DEVICE_LINKED_LIST), GFP_KERNEL);
+    if (dList == NULL){
+        return NULL;
+    }
+
+    printk("Allocation Successfully for Devices List\n");
+    dList->head = NULL;
+}
+
+void destroyChannel(CHANNEL* channel){
+    if (channel != NULL) {
+        printk("Destroying channel with id %d\n", channel->channelId);
+        kfree(channel);
+    }
+}
+
+void destroyChannelNode(CHANNEL_NODE* cNode){
+    if (cNode != NULL){
+        printk("Destroying channel node associated with channel id %d\n", cNode->dataChannel->channelId);
+        destroyChannel(cNode->dataChannel);
+        kfree(cNode);
+    }
+}
+
+void destroyChannelLinkedList(CHANNEL_LINKED_LIST* cList){
+    CHANNEL_NODE* current;
+    CHANNEL_NODE* tmp;
+    if (cList != NULL){
+        printk("Destroying channels List\n");
+        current = cList->head;
+        while (current != NULL){
+            tmp = current;
+            current = current->next;
+            destroyChannelNode(tmp);
+        }
+    }
+}
+
+void destroyDevice(DEVICE* device){
+    if (device != NULL){
+        printk("Destroying device with minor number %d\n", device->minor);
+        destroyChannelLinkedList(device->channels);
+        kfree(device);
+    }
+}
+
+void destroyDeviceNode(DEVICE_NODE* dNode){
+    if (dNode != NULL){
+        printk("Destroying device node associated with device with minor number %d\n", dNode->device->minor);
+        destroyDevice(dNode->device);
+        kfree(dNode);
+    }
+}
+
+void destroyDeviceLinkedList(DEVICE_LINKED_LIST* dList){
+    DEVICE_NODE* current;
+    DEVICE_NODE* tmp;
+    if (dList != NULL){
+        printk("Destroying devices List\n");
+        current = dList->head;
+        while (current != NULL){
+            tmp = current;
+            current = current->next;
+            destroyDeviceNode(tmp);
+        }
+    }
+}
+
+int addChannel(CHANNEL_LINKED_LIST* cList, unsigned long channelId){
+    CHANNEL* channel;
+    CHANNEL_NODE* newChannelNode;
+    CHANNEL_NODE* currentNode;
+    printk("Adding new channel with id %d to channel linked list\n", channelId);
+    channel = createChannel(channelId);
+
+    if (channel == NULL){
+        printk("Failed adding, memory error in channel\n");
+        return -1;
+    }
+    newChannelNode = createChannelNode(channel);
+    if (newChannelNode == NULL){
+        printk("Failed adding, memory error in channel node\n");
+        return -1;
+    }
+
+    currentNode = cList->head;
+    if (currentNode == NULL){
+        printk("Adding node channel to head of list\n");
+        cList->head = newChannelNode;
+    }
+    else{
+        while (currentNode->next != NULL){
+            currentNode = currentNode->next;
+        }
+        printk("Adding node channel to end of list\n");
+        currentNode->next = newChannelNode;
+    }
+    return 0;
+}
+
+int addDevice(DEVICE_LINKED_LIST* dList, int minor){
+    DEVICE* device;
+    DEVICE_NODE* newDeviceNode;
+    DEVICE_NODE* currentNode;
+    printk("Adding new channel with minor number %d to device linked list\n", minor);
+    device = createDevice(minor);
+
+    if (device == NULL){
+        printk("Failed adding, memory error in device\n");
+        return -1;
+    }
+
+    newDeviceNode = createDeviceNode(device);
+    if (newDeviceNode == NULL){
+        printk("Failed adding, memory error in device node\n");
+        return -1;
+    }
+
+    currentNode = dList->head;
+    if (currentNode == NULL){
+        printk("Adding node device to head of list\n");
+        dList->head = newDeviceNode;
+    }
+    else{
+        while (currentNode->next != NULL){
+            currentNode = currentNode->next;
+        }
+        printk("Adding node device to end of list\n");
+        currentNode->next = newDeviceNode;
+    }
+    return 0;
+}
+
+DEVICE* findDeviceFromMinor(DEVICE_LINKED_LIST* dList, int minor){
+    printk("Searching for device with minor %d\n", minor);
+    DEVICE* device;
+    DEVICE_NODE* current;
+    device = NULL;
+    current = dList->head;
+
+    while (current != NULL){
+        if (current->device->minor == minor){
+            device = current->device;
             break;
         }
     }
-
-    return index;
+    return device;
 }
 
-int findAvialableChannelIndex(CHANNEL_DEVICE* device){
-    int i;
-    int index;
-    index = -1;
-    printk("Looking of an available place to locate a new channel buffer\n");
-    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
-        if (device->channels[i] != NULL){
-            index = i;
-            printk("Found an available place for channel in index %d\n", i);
-            break;
-        }
-    }
 
-    return index;
-}
 
-// Write a message to a channel, return num of bytes written or -1 on error
-int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength){
-    int i;
-    printk("Inside the write message to channel helper function\n");
-    if (messageLength > BUF_LEN){
-        return -1;
-    }
-    for (i=0; i < messageLength; i++){
-        get_user(channel->channelBuffer[i], &message[i]);
-    }
 
-    //update the channel and return number of bytes written to channel
-    channel->messageExists = 1;
-    channel->currentMessageLength = i;
-    printk("Wrote the message %s\n", channel->channelBuffer);
-    return i;
-}
 
-// Read a message from a channel, return num of bytes read from channel or -1 on error
-int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLength){
-    int currentMsgLength;
-    int i;
-    printk("Inside the read message from channel helper function\n");
-    if (channel->messageExists == 0){ //there isn't a message on this channel
-        return -1;
-    }
-    currentMsgLength = channel->currentMessageLength;
-    if (bufferLength < currentMsgLength){ // user space buffer is too small for the message in channel
-        return -1;
-    }
 
-    for (i=0; i < currentMsgLength; i++){
-        put_user(channel->channelBuffer[i], &userBuffer[i]);
-    }
 
-    // return number of bytes read
-    printk("Read the message %s\n", channel->channelBuffer);
-    return i;
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Allocate memory and initialize device object
+
+//DEVICE* allocateDevice(int minor){
+//    DEVICE* device;
+//    int i;
+//    printk("Trying to allocated memory for new device object\n");
+//    device = (DEVICE* ) kmalloc(sizeof(DEVICE), GFP_KERNEL);
+//    if (device == NULL) {
+//        return NULL;
+//    }
+//
+//    printk("Allocated memory successfully\n");
+//    // update device data
+//    device->minor = minor;
+//    device->isOpen = 1;
+//    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
+//        device->channels[i] = NULL;
+//    }
+//    printk("Initiated device values\n");
+//    return device;
+//}
+//
+//// Search for the device id within the devices in control by this driver - use minor number
+//DEVICE* getExistingDeviceFromMinor(int minor, int* index){
+//    DEVICE* device;
+//    DEVICE* currentDevice;
+//    int i;
+//    int deviceIndex;
+//    device = NULL;
+//    deviceIndex = -1;
+//    printk( "Trying to return a device requested using minor num\n");
+//    for (i = 0; i < MAX_DEVICES_FOR_DRIVER; i++){
+//        currentDevice = devices[i];
+//        if (currentDevice !=NULL){
+//            printk("The current device is not null and is minor number is %d\n", currentDevice->minor);
+//        }
+//        if (currentDevice != NULL && currentDevice->minor == minor){
+//            printk( "Found the device with the minor number within the device at index %d\n", i);
+//            device = currentDevice;
+//            deviceIndex = i;
+//            break;
+//        }
+//    }
+//
+//    *index = deviceIndex;
+//    return device;
+//}
+//
+//// Search for the channel id within the device channels - use channel id
+//CHANNEL* getChannelFromDevice(DEVICE* device, unsigned long channelId){
+//    CHANNEL* channel;
+//    CHANNEL* currentChannel;
+//    int i;
+//    channel = NULL;
+//    printk( "Trying to return a channel object requested using its id\n");
+//    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
+//        currentChannel = device->channels[i];
+//        if (currentChannel != NULL && currentChannel->channelId == channelId){
+//            printk( "Found the channel with the id within the device at index %d\n", i);
+//            channel = currentChannel;
+//            break;
+//        }
+//    }
+//    return channel;
+//}
+//
+//int findAvailableDeviceIndex(){
+//    int i;
+//    int index;
+//    index = -1;
+//    printk("Looking of an available place to locate a device\n");
+//    for (i=0; i < MAX_DEVICES_FOR_DRIVER; i++){
+//        if (devices[i] == NULL){
+//            index = i;
+//            printk("Found an available place for device in index %d\n", i);
+//            break;
+//        }
+//    }
+//
+//    return index;
+//}
+//
+//int findAvialableChannelIndex(DEVICE* device){
+//    int i;
+//    int index;
+//    index = -1;
+//    printk("Looking of an available place to locate a new channel buffer\n");
+//    for (i=0; i < MAX_CHANNELS_FOR_DEVICE; i++){
+//        if (device->channels[i] != NULL){
+//            index = i;
+//            printk("Found an available place for channel in index %d\n", i);
+//            break;
+//        }
+//    }
+//
+//    return index;
+//}
+//
+//// Write a message to a channel, return num of bytes written or -1 on error
+//int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength){
+//    int i;
+//    printk("Inside the write message to channel helper function\n");
+//    if (messageLength > BUF_LEN){
+//        return -1;
+//    }
+//    for (i=0; i < messageLength; i++){
+//        get_user(channel->channelBuffer[i], &message[i]);
+//    }
+//
+//    //update the channel and return number of bytes written to channel
+//    channel->messageExists = 1;
+//    channel->currentMessageLength = i;
+//    printk("Wrote the message %s\n", channel->channelBuffer);
+//    return i;
+//}
+//
+//// Read a message from a channel, return num of bytes read from channel or -1 on error
+//int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLength){
+//    int currentMsgLength;
+//    int i;
+//    printk("Inside the read message from channel helper function\n");
+//    if (channel->messageExists == 0){ //there isn't a message on this channel
+//        return -1;
+//    }
+//    currentMsgLength = channel->currentMessageLength;
+//    if (bufferLength < currentMsgLength){ // user space buffer is too small for the message in channel
+//        return -1;
+//    }
+//
+//    for (i=0; i < currentMsgLength; i++){
+//        put_user(channel->channelBuffer[i], &userBuffer[i]);
+//    }
+//
+//    // return number of bytes read
+//    printk("Read the message %s\n", channel->channelBuffer);
+//    return i;
+//}

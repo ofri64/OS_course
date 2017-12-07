@@ -21,8 +21,6 @@
 #define BUF_LEN 128
 #define DEVICE_FILE_NAME "message_slot_dev"
 #define SUCCESS 0
-#define MAX_CHANNELS_FOR_DEVICE 4
-#define MAX_DEVICES_FOR_DRIVER 4
 
 // struct to represent communication channel
 typedef struct channel{
@@ -32,20 +30,62 @@ typedef struct channel{
     char channelBuffer[BUF_LEN];
 } CHANNEL;
 
+// Channel Node object of a Linked List
+typedef struct channel_node{
+    CHANNEL* dataChannel;
+    struct channel_node* next;
+} CHANNEL_NODE;
+
+// Channels Linked List object
+typedef struct channel_linked_list{
+    CHANNEL_NODE* head;
+} CHANNEL_LINKED_LIST;
+
 // struct to represent a specific device - identified by it's minor number
 typedef struct channel_device{
     int minor;
     int isOpen;
-    CHANNEL* channels[MAX_CHANNELS_FOR_DEVICE];
-} CHANNEL_DEVICE;
+    CHANNEL_LINKED_LIST* channels;
+} DEVICE;
 
-CHANNEL_DEVICE* getExistingDeviceFromMinor(int minor, int* index);
-CHANNEL_DEVICE* allocateDevice(int minor);
-int findAvailableDeviceIndex(void);
-CHANNEL* getChannelFromDevice(CHANNEL_DEVICE* device, unsigned long channelId);
-int findAvialableChannelIndex(CHANNEL_DEVICE* device);
-int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength);
-int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLength);
+// Device Node object of a Linked List
+typedef struct device_node{
+    DEVICE* device;
+    struct device_node* next;
+} DEVICE_NODE;
+
+// Devices Linked List object
+typedef struct device_linked_list{
+    DEVICE_NODE* head;
+} DEVICE_LINKED_LIST;
+
+CHANNEL* createChannel(unsigned long channelId);
+CHANNEL_NODE* createChannelNode(CHANNEL* channel);
+DEVICE* createDevice(int minor);
+DEVICE_NODE* createDeviceNode(DEVICE* device);
+CHANNEL_LINKED_LIST* cretaeEmptyChannelsList();
+DEVICE_LINKED_LIST* createEmptyDeviceList();
+
+void destroyChannel(CHANNEL*);
+void destroyChannelNode(CHANNEL_NODE*);
+void destroyChannelLinkedList(CHANNEL_LINKED_LIST*);
+void destroyDevice(DEVICE*);
+void destroyDeviceNode(DEVICE_NODE*);
+void destroyDeviceLinkedList(DEVICE_LINKED_LIST*);
+
+int addChannel(CHANNEL_LINKED_LIST* cList, unsigned long channelId);
+int addDevice(DEVICE_LINKED_LIST* dList, int minor);
+DEVICE* findDeviceFromMinor(DEVICE_LINKED_LIST* dList, int minor);
+CHANNEL* findChannelInDevice(DEVICE* device, unsigned long channelId);
+
+
+//DEVICE* getExistingDeviceFromMinor(int minor, int* index);
+//DEVICE* allocateDevice(int minor);
+//int findAvailableDeviceIndex(void);
+//CHANNEL* getChannelFromDevice(DEVICE* device, unsigned long channelId);
+//int findAvialableChannelIndex(DEVICE* device);
+//int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength);
+//int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLength);
 
 
 #endif //OS_COURSE_MESSAGE_SLOT_H
