@@ -32,6 +32,7 @@ MODULE_LICENSE("GPL");
 
 // Devices Linked list to represent all the devices our driver handles (assume now it is constant)
 static DEVICE_LINKED_LIST* list;
+static int currentHandledDevice = -1;
 
 //================== DEVICE FUNCTIONS ===========================
 static int device_open( struct inode* inode,
@@ -47,7 +48,8 @@ static int device_open( struct inode* inode,
     if (device != NULL) {
         //device is already allocated, just need to open it
         device->isOpen = 1;
-        printk("The device was found, and marked as open\n");
+        currentHandledDevice = minor;
+        printk("The device was found, and marked as open and as current handled device\n");
     }
     else {
         printk("The device was not found, trying to create a new device\n");
@@ -57,8 +59,9 @@ static int device_open( struct inode* inode,
             return -ENOMEM;
         }
 
-        // New device created is already marked as open. no need to mark again
-        printk("Successfully created a new device\n");
+        // New device created is already marked as open, but do need to set current handled device
+        currentHandledDevice = minor;
+        printk("Successfully created a new device and marked it as current handled device\n");
     }
     return SUCCESS;
 }
@@ -118,13 +121,48 @@ static long device_ioctl( struct   file* file,
                           unsigned int   ioctl_command_id,
                           unsigned long  ioctl_param )
 {
+    DEVICE* currentDevice;
+    CHANNEL* currentChannel;
+    CHANNEL_LINKED_LIST* cList;
+    int status;
     // Switch according to the ioctl called
     printk("Entering ioctl command\n");
     if( MSG_SLOT_CHANNEL == ioctl_command_id )
     {
         // Get the parameter given to ioctl by the process
         printk( "Invoking ioctl: associating the channel id given to the file descriptor %ld\n", ioctl_param );
-        file->privet_date = (void *) ioctl_param;
+        file->private_data = (void *) ioctl_param;
+
+        // Verify that the channel exists. Crate a new channel if it doesn't
+
+        currentDevice = findDeviceFromMinor(list, currentHandledDevice);
+        if (currentDevice == NULL){
+            printk("Wrong ioctl command. the device is not defined yet\n");
+            return -EINVAL;
+        }
+
+        currentChannel = findChannelInDevice(currentDevice, ioctl_param);
+        if (currentChannel != NULL){
+            printk("The channel already exists - ready for read or write operations\n");
+        }
+        else{
+            printk("The channel doesn't exists - trying to allocate a new channel\n");
+
+            if (currentDevice->channels == NULL){ // no channels list at all for device
+                printk("Needs to allocate also channels linked list for the device\n");
+                cList = cretaeEmptyChannelsList();
+                if (cList == NULL){
+                    printk("Channels linked list allocation failed. returning indicating status\n");
+                    return -ENOMEM;
+                }
+            }
+            status = addChannel(currentDevice->channels, ioctl_param);
+            if (status < 0){
+                printk("New channel allocation failed. returning indicating status\n");
+                return -ENOMEM;
+            }
+        }
+
         return SUCCESS;
     }
 
@@ -453,42 +491,45 @@ CHANNEL* findChannelInDevice(DEVICE* device, unsigned long channelId){
 }
 
 
-//// Write a message to a channel, return num of bytes written or -1 on error
-//int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength){
-//    int i;
-//    printk("Inside the write message to channel helper function\n");
-//    if (messageLength > BUF_LEN){
-//        return -1;
-//    }
-//    for (i=0; i < messageLength; i++){
-//        get_user(channel->channelBuffer[i], &message[i]);
-//    }
-//
-//    //update the channel and return number of bytes written to channel
-//    channel->messageExists = 1;
-//    channel->currentMessageLength = i;
-//    printk("Wrote the message %s\n", channel->channelBuffer);
-//    return i;
-//}
-//
-//// Read a message from a channel, return num of bytes read from channel or -1 on error
-//int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLength){
-//    int currentMsgLength;
-//    int i;
-//    printk("Inside the read message from channel helper function\n");
-//    if (channel->messageExists == 0){ //there isn't a message on this channel
-//        return -1;
-//    }
-//    currentMsgLength = channel->currentMessageLength;
-//    if (bufferLength < currentMsgLength){ // user space buffer is too small for the message in channel
-//        return -1;
-//    }
-//
-//    for (i=0; i < currentMsgLength; i++){
-//        put_user(channel->channelBuffer[i], &userBuffer[i]);
-//    }
-//
-//    // return number of bytes read
-//    printk("Read the message %s\n", channel->channelBuffer);
-//    return i;
-//}
+// Write a message to a channel, return num of bytes written or -1 on error
+int writeMessageToChannel(CHANNEL* channel, const char* message, int messageLength){
+    int i;
+    printk("Inside the write message to channel helper function\n");
+    if (messageLength > BUF_LEN){
+        printk("Writing failed. Message length is greater than channel buffer size\n");
+        return -1;
+    }
+    for (i=0; i < messageLength; i++){
+        get_user(channel->channelBuffer[i], &message[i]);
+    }
+
+    //update the channel and return number of bytes written to channel
+    channel->messageExists = 1;
+    channel->currentMessageLength = i;
+    printk("Wrote the message %s\n", channel->channelBuffer);
+    return i;
+}
+
+// Read a message from a channel, return num of bytes read from channel or -1 on error
+int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength){
+    int currentMsgLength;
+    int i;
+    printk("Inside the read message from channel helper function\n");
+    if (channel->messageExists == 0){ //there isn't a message on this channel
+        printk("Read failed. the channel exist but there isn't a message yet on the channel\n");
+        return -1;
+    }
+    currentMsgLength = channel->currentMessageLength;
+    if (bufferLength < currentMsgLength){ // user space buffer is too small for the message in channel
+        printk("Read failed. the provided buffer is too small to hold the message in the channel\n");
+        return -2;
+    }
+
+    for (i=0; i < currentMsgLength; i++){
+        put_user(channel->channelBuffer[i], &userBuffer[i]);
+    }
+
+    // return number of bytes read
+    printk("Read the message %s\n", channel->channelBuffer);
+    return i;
+}

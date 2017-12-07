@@ -78,8 +78,8 @@ int addDevice(DEVICE_LINKED_LIST* dList, int minor);
 DEVICE* findDeviceFromMinor(DEVICE_LINKED_LIST* dList, int minor);
 CHANNEL* findChannelInDevice(DEVICE* device, unsigned long channelId);
 
-//int write_message_to_channel(CHANNEL* channel, const char* message, int messageLength);
-//int read_message_from_channel(CHANNEL* channel, char* userBuffer, int bufferLength);
+int writeMessageToChannel(CHANNEL *channel, const char *message, int messageLength);
+int readMessageFromChannel(CHANNEL *channel, char *userBuffer, int bufferLength);
 
 
 #endif //OS_COURSE_MESSAGE_SLOT_H
