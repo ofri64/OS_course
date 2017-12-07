@@ -32,7 +32,7 @@ MODULE_LICENSE("GPL");
 
 // Devices Linked list to represent all the devices our driver handles (assume now it is constant)
 static DEVICE_LINKED_LIST* list;
-static int currentHandledDevice = 0;
+static int currentHandledDevice = -1;
 
 //================== DEVICE FUNCTIONS ===========================
 static int device_open( struct inode* inode,
@@ -121,10 +121,10 @@ static long device_ioctl( struct   file* file,
                           unsigned int   ioctl_command_id,
                           unsigned long  ioctl_param )
 {
-//    DEVICE* currentDevice;
-//    CHANNEL* currentChannel;
-//    CHANNEL_LINKED_LIST* cList;
-//    int status;
+    DEVICE* currentDevice;
+    CHANNEL* currentChannel;
+    CHANNEL_LINKED_LIST* cList;
+    int status;
     // Switch according to the ioctl called
     printk("Entering ioctl command\n");
     if( MSG_SLOT_CHANNEL == ioctl_command_id )
@@ -133,15 +133,15 @@ static long device_ioctl( struct   file* file,
         printk( "Invoking ioctl: associating the channel id given to the file descriptor %ld\n", ioctl_param );
         file->private_data = (void *) ioctl_param;
 
-        printk("the current handled device by the driver is %ld", currentHandledDevice);
+        printk("the current device handled by the driver is %d", currentHandledDevice);
 
-//        // Verify that the channel exists. Crate a new channel if it doesn't
-//
-//        currentDevice = findDeviceFromMinor(list, currentHandledDevice);
-//        if (currentDevice == NULL){
-//            printk("Wrong ioctl command. the device is not defined yet\n");
-//            return -EINVAL;
-//        }
+        // Verify that the channel exists. Crate a new channel if it doesn't
+
+        currentDevice = findDeviceFromMinor(list, currentHandledDevice);
+        if (currentDevice == NULL){
+            printk("Wrong ioctl command. the device is not defined yet\n");
+            return -EINVAL;
+        }
 //
 //        currentChannel = findChannelInDevice(currentDevice, ioctl_param);
 //        if (currentChannel != NULL){
