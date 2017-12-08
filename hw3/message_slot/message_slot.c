@@ -133,7 +133,7 @@ static long device_ioctl( struct   file* file,
         printk( "Invoking ioctl: associating the channel id given to the file descriptor %ld\n", ioctl_param );
         file->private_data = (void *) ioctl_param;
 
-        printk("the current device handled by the driver is %d", currentHandledDevice);
+        printk("The current device handled by the driver is %d", currentHandledDevice);
 
         // Verify that the channel exists. Crate a new channel if it doesn't
 
@@ -142,13 +142,13 @@ static long device_ioctl( struct   file* file,
             printk("Wrong ioctl command. the device is not defined yet\n");
             return -EINVAL;
         }
-//
-//        currentChannel = findChannelInDevice(currentDevice, ioctl_param);
-//        if (currentChannel != NULL){
-//            printk("The channel already exists - ready for read or write operations\n");
-//        }
-//        else{
-//            printk("The channel doesn't exists - trying to allocate a new channel\n");
+
+        currentChannel = findChannelInDevice(currentDevice, ioctl_param);
+        if (currentChannel != NULL){
+            printk("The channel already exists - ready for read or write operations\n");
+        }
+        else{
+            printk("The channel doesn't exists - trying to allocate a new channel\n");
 //
 //            if (currentDevice->channels == NULL){ // no channels list at all for device
 //                printk("Needs to allocate also channels linked list for the device\n");
@@ -163,7 +163,7 @@ static long device_ioctl( struct   file* file,
 //                printk("New channel allocation failed. returning indicating status\n");
 //                return -ENOMEM;
 //            }
-//        }
+        }
     }
 
 
