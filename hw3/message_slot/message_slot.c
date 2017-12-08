@@ -478,8 +478,16 @@ CHANNEL* findChannelInDevice(DEVICE* device, unsigned long channelId){
     CHANNEL* channel;
     CHANNEL_NODE* currentNode;
     channel = NULL;
-    currentNode = device->channels->head;
     printk("Searching for channel with id %d in device %d\n", (int) channelId, device->minor);
+
+    // The device doesn't have a channels linked list even yet.
+    if (device->channels == NULL){
+        printk("The given device doesn't have any known channels at all yet\n");
+        return channel;
+    }
+
+    // The channels linked list exists, need to search for the desired channel id
+    currentNode = device->channels->head;
 
     while (currentNode != NULL){
         if (currentNode->dataChannel->channelId == channelId){
