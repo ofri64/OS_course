@@ -100,11 +100,12 @@ static ssize_t device_read( struct file* file, char __user* buffer, size_t lengt
     unsigned long channelId;
     DEVICE* currentDevice;
     CHANNEL* currentChannel;
+    int readStatus;
     printk( "Invocing device_read with file descriptor and message length: (%p,%d) \n", file, (int) length);
 
-    channelId = file->private_data;
+    channelId = (unsigned long) file->private_data;
     printk("The current handeled device number is %d\n",currentHandledDevice);
-    printk( "The desired channel id to write to is %ld\n", channelId);
+    printk( "The desired channel id to read from is %ld\n", channelId);
 
     // check for erros
     currentDevice = findDeviceFromMinor(list, currentHandledDevice);
@@ -115,12 +116,22 @@ static ssize_t device_read( struct file* file, char __user* buffer, size_t lengt
 
     currentChannel = findChannelInDevice(currentDevice, channelId);
     if (currentChannel == NULL){
-        prinkt("The desired channel hasn't been set yet %ld\n", channelId);
+        printk("The desired channel hasn't been set yet %ld\n", channelId);
         return -EINVAL;
     }
 
-    //invalid argument error
-    return -EINVAL;
+    readStatus = readMessageFromChannel(currentChannel, buffer, length);
+    if (readStatus == -1){
+        return -EWOULDBLOCK;
+    }
+
+    if (readStatus == -2){
+        return -ENOSPC;
+    }
+
+
+    // Read status is 0 - read the message successfully
+    return SUCCESS;
 }
 
 //---------------------------------------------------------------
@@ -518,7 +529,6 @@ CHANNEL* findChannelInDevice(DEVICE* device, unsigned long channelId){
         }
         currentNode = currentNode->next;
     }
-    printk("Didn't find the searched channel, returning NULL\n");
     return channel;
 }
 
