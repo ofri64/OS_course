@@ -149,20 +149,22 @@ static long device_ioctl( struct   file* file,
         }
         else{
             printk("The channel doesn't exists - trying to allocate a new channel\n");
-//
-//            if (currentDevice->channels == NULL){ // no channels list at all for device
-//                printk("Needs to allocate also channels linked list for the device\n");
-//                cList = cretaeEmptyChannelsList();
-//                if (cList == NULL){
-//                    printk("Channels linked list allocation failed. returning indicating status\n");
-//                    return -ENOMEM;
-//                }
-//            }
-//            status = addChannel(currentDevice->channels, ioctl_param);
-//            if (status < 0){
-//                printk("New channel allocation failed. returning indicating status\n");
-//                return -ENOMEM;
-//            }
+
+            if (currentDevice->channels == NULL){ // no channels list at all for device
+                printk("Needs to allocate also channels linked list for the device\n");
+                cList = cretaeEmptyChannelsList();
+                if (cList == NULL){
+                    printk("Channels linked list allocation failed. returning indicating status\n");
+                    return -ENOMEM;
+                }
+                currentDevice->channels = cList;
+            }
+
+            status = addChannel(currentDevice->channels, ioctl_param);
+            if (status < 0){
+                printk("New channel allocation failed. returning indicating status\n");
+                return -ENOMEM;
+            }
         }
     }
 
