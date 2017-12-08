@@ -16,7 +16,7 @@ int main()
     if( file_desc < 0 )
     {
         printf ("Can't open device file: %s\n", DEVICE_FILE_NAME);
-        fprintf(stderr, "file error is%s\n", strerror(errno));
+        fprintf(stderr, "file error is %s\n", strerror(errno));
         exit(-1);
     }
 

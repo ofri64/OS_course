@@ -574,7 +574,7 @@ int writeMessageToChannel(CHANNEL* channel, const char* message, int messageLeng
     //update the channel and return number of bytes written to channel
     channel->messageExists = 1;
     channel->currentMessageLength = i;
-    printk("Wrote the message %s\n", channel->channelBuffer);
+    printk("Wrote to channel %ld a message with length %d\n", channel->channelId, i);
     return i;
 }
 
@@ -598,6 +598,6 @@ int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength)
     }
 
     // return number of bytes read
-    printk("Read the message %s\n", channel->channelBuffer);
+    printk("Read from channel %ld a message with length %d\n", channel->channelId, i));
     return i;
 }
