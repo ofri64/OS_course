@@ -97,9 +97,28 @@ static int device_release( struct inode* inode,
 // the device file attempts to read from it
 static ssize_t device_read( struct file* file, char __user* buffer, size_t length, loff_t* offset){
 
-    // read doesnt really do anything (for now)
-    printk( "Invocing device_read(%p,%d) operation not supported yet\n", file, (int) length);
-    printk( "But I can show you the value associated with the fd value: %d\n", (int) file->private_data);
+    unsigned long channelId;
+    DEVICE* currentDevice;
+    CHANNEL* currentChannel;
+    printk( "Invocing device_read with file descriptor and message length: (%p,%d) \n", file, (int) length);
+
+    channelId = file->private_data;
+    printk("The current handeled device number is %d\n",currentHandledDevice);
+    printk( "The desired channel id to write to is %ld\n", channelId);
+
+    // check for erros
+    currentDevice = findDeviceFromMinor(list, currentHandledDevice);
+    if (currentDevice == NULL || currentDevice->isOpen == 0){
+        printk("Problem with current device - it doens't exist or it did not opend prior to read request\n");
+        return -EINVAL;
+    }
+
+    currentChannel = findChannelInDevice(currentDevice, channelId);
+    if (currentChannel == NULL){
+        prinkt("The desired channel hasn't been set yet %ld\n", channelId);
+        return -EINVAL;
+    }
+
     //invalid argument error
     return -EINVAL;
 }
