@@ -22,32 +22,29 @@ int main()
 
     printf("file descriptor num is %d\n", file_desc);
     char buff[256];
-//    ret_val = write( file_desc, "Hello", 5);
-//    if (ret_val < 0){
-//        printf("Can't write device file: %s\n", "simple_char_dev");
-//        fprintf(stderr, "file error is%s\n", strerror(errno));
-//    }
-//    ret_val = read( file_desc, buff, 5 );
-//    if (ret_val < 0){
-//        printf("Can't read device file: %s\n", "simple_char_dev");
-//        fprintf(stderr, "file error is%s\n", strerror(errno));
-//    }
-//    else{
-//        printf("read into buffer the string %s\n", buff);
-//    }
-    ret_val = ioctl( file_desc, MSG_SLOT_CHANNEL, 22);
 
+    ret_val = ioctl( file_desc, MSG_SLOT_CHANNEL, 22);
     if (ret_val < 0){
-        printf("Can't operate ioctl for device: %s\n", "DEVICE_FILE_NAME");
+        printf("Can't operate ioctl for device: %s\n", DEVICE_FILE_NAME);
+        fprintf(stderr, "file error is %s\n", strerror(errno));
+    }
+
+    ret_val = write( file_desc, "Hello", 5);
+    if (ret_val < 0){
+        printf("Can't write device file: %s\n", DEVICE_FILE_NAME);
         fprintf(stderr, "file error is %s\n", strerror(errno));
     }
 
     ret_val = read( file_desc, buff, 5 );
 
     if (ret_val < 0 ){
-        printf("Cannot read from the device: %s\n", "DEVICE_FILE_NAME");
+        printf("Cannot read from the device: %s\n", DEVICE_FILE_NAME);
         fprintf(stderr, "file error is %s\n", strerror(errno));
     }
+    else{
+        printf("Read from device the following string: %s\n", buff);
+    }
+
 
     close(file_desc);
     return 0;

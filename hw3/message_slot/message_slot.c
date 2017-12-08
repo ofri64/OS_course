@@ -107,10 +107,10 @@ static ssize_t device_read( struct file* file, char __user* buffer, size_t lengt
     printk("The current handeled device number is %d\n",currentHandledDevice);
     printk( "The desired channel id to read from is %ld\n", channelId);
 
-    // check for erros
+    // check for errors
     currentDevice = findDeviceFromMinor(list, currentHandledDevice);
     if (currentDevice == NULL || currentDevice->isOpen == 0){
-        printk("Problem with current device - it doens't exist or it did not opend prior to read request\n");
+        printk("Problem with current device - it doens't exist or it did not opened prior to read request\n");
         return -EINVAL;
     }
 
@@ -140,10 +140,36 @@ static ssize_t device_read( struct file* file, char __user* buffer, size_t lengt
 
 static ssize_t device_write( struct file* file, const char __user* buffer, size_t length, loff_t* offset){
 
-    // read doesnt really do anything (for now)
-    printk( "Invocing write(%p,%d) operation not supported yet\n", file, (int) length);
-    //invalid argument error
-    return -EINVAL;
+    unsigned long channelId;
+    DEVICE* currentDevice;
+    CHANNEL* currentChannel;
+    int writeStatus;
+    printk( "Invocing device_write with file descriptor and message length: (%p,%d) \n", file, (int) length);
+
+    channelId = (unsigned long) file->private_data;
+    printk("The current handeled device number is %d\n",currentHandledDevice);
+    printk( "The desired channel id to read from is %ld\n", channelId);
+
+    // check for errors
+    currentDevice = findDeviceFromMinor(list, currentHandledDevice);
+    if (currentDevice == NULL || currentDevice->isOpen == 0){
+        printk("Problem with current device - it doens't exist or it did not opened prior to read request\n");
+        return -EINVAL;
+    }
+
+    currentChannel = findChannelInDevice(currentDevice, channelId);
+    if (currentChannel == NULL){
+        printk("The desired channel hasn't been set yet %ld\n", channelId);
+        return -EINVAL;
+    }
+
+    writeStatus = writeMessageToChannel(currentChannel, buffer, length);
+    if (writeStatus < 0){
+        return -EINVAL;
+    }
+
+    // Write was successful
+    return SUCCESS;
 }
 
 //----------------------------------------------------------------
