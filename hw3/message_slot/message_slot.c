@@ -598,6 +598,6 @@ int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength)
     }
 
     // return number of bytes read
-    printk("Read from channel %ld a message with length %d\n", channel->channelId, i));
+    printk("Read from channel %ld a message with length %d\n", channel->channelId, i);
     return i;
 }
