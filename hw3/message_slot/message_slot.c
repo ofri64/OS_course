@@ -491,15 +491,15 @@ CHANNEL* findChannelInDevice(DEVICE* device, unsigned long channelId){
 int writeMessageToChannel(CHANNEL* channel, const char* message, int messageLength){
     int i;
     int bytesWrote;
-    if (messageLength > BUF_DATA_LEN){
+    if (messageLength > BUF_LEN){
         return -1;
     }
-    for (i=0; i < messageLength+1; i++){
+    for (i=0; i < messageLength; i++){
         get_user(channel->channelBuffer[i], &message[i]);
     }
 
     //update the channel and return number of bytes written to channel
-    bytesWrote = i-1;
+    bytesWrote = i;
     channel->messageExists = 1;
     channel->currentMessageLength = bytesWrote;
     return bytesWrote;
@@ -513,7 +513,7 @@ int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength)
     if (channel->messageExists == 0){ //there isn't a message on this channel
         return -1;
     }
-    currentMsgLength = channel->currentMessageLength + 1;
+    currentMsgLength = channel->currentMessageLength;
     if (bufferLength < currentMsgLength){ // user space buffer is too small for the message in channel
         return -2;
     }
@@ -523,6 +523,6 @@ int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength)
     }
 
     // return number of bytes read
-    bytesRead = i-1;
+    bytesRead = i;
     return bytesRead;
 }

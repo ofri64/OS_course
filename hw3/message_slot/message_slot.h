@@ -19,7 +19,6 @@
 
 #define DEVICE_RANGE_NAME "message_slot_char_dev"
 #define BUF_LEN 128
-#define BUF_DATA_LEN 127
 #define DEVICE_FILE_NAME "message_slot_dev"
 #define SUCCESS 0
 
