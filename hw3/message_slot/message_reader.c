@@ -20,7 +20,7 @@ int main(int argc, char** argv){
     }
 
     char* deviceFile = argv[1];
-    int channelId = atoi(argv[2]);
+    unsigned long channelId = (unsigned long) atoi(argv[2]);
     char buffer[BUF_LEN];
 
     int file_desc = open(deviceFile, O_RDONLY);
@@ -38,7 +38,7 @@ int main(int argc, char** argv){
         return -1;
     }
 
-    long readReturn = read( file_desc,buffer , BUF_LEN);
+    long readReturn = read( file_desc, buffer , BUF_LEN);
     if (readReturn < 0){
         printf("Can't read device file: %s\n", deviceFile);
         fprintf(stderr, "file error is %s\n", strerror(errno));

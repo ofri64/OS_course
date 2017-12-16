@@ -20,7 +20,7 @@ int main(int argc, char** argv){
     }
 
     char* deviceFile = argv[1];
-    int channelId = atoi(argv[2]);
+    unsigned long channelId = (unsigned long) atoi(argv[2]);
     char *theMessage = argv[3];
     size_t messageLen = strlen(theMessage);
 

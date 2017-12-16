@@ -562,32 +562,35 @@ CHANNEL* findChannelInDevice(DEVICE* device, unsigned long channelId){
 // Write a message to a channel, return num of bytes written or -1 on error
 int writeMessageToChannel(CHANNEL* channel, const char* message, int messageLength){
     int i;
+    int bytesWrote;
     printk("Inside the write message to channel helper function\n");
-    if (messageLength > BUF_LEN){
+    if (messageLength > BUF_DATA_LEN){
         printk("Writing failed. Message length is greater than channel buffer size\n");
         return -1;
     }
-    for (i=0; i < messageLength; i++){
+    for (i=0; i < messageLength+1; i++){
         get_user(channel->channelBuffer[i], &message[i]);
     }
 
     //update the channel and return number of bytes written to channel
+    bytesWrote = i-1;
     channel->messageExists = 1;
-    channel->currentMessageLength = i;
+    channel->currentMessageLength = bytesWrote;
     printk("Wrote to channel %ld a message with length %d\n", channel->channelId, i);
-    return i;
+    return bytesWrote;
 }
 
 // Read a message from a channel, return num of bytes read from channel or -1 on error
 int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength){
     int currentMsgLength;
     int i;
+    int bytesRead;
     printk("Inside the read message from channel helper function\n");
     if (channel->messageExists == 0){ //there isn't a message on this channel
         printk("Read failed. the channel exist but there isn't a message yet on the channel\n");
         return -1;
     }
-    currentMsgLength = channel->currentMessageLength;
+    currentMsgLength = channel->currentMessageLength + 1;
     if (bufferLength < currentMsgLength){ // user space buffer is too small for the message in channel
         printk("Read failed. the provided buffer is too small to hold the message in the channel\n");
         return -2;
@@ -598,6 +601,7 @@ int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength)
     }
 
     // return number of bytes read
+    bytesRead = i-1;
     printk("Read from channel %ld a message with length %d\n", channel->channelId, i);
-    return i;
+    return bytesRead;
 }
