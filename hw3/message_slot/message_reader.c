@@ -17,7 +17,7 @@
 int main(int argc, char** argv){
     if (argc != 3){
         printf (WRONG_ARGS);
-        return;
+        return -1;
     }
 
     char* deviceFile = argv[1];
