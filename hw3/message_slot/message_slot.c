@@ -113,6 +113,10 @@ static ssize_t device_read( struct file* file, char __user* buffer, size_t lengt
         return -ENOSPC;
     }
 
+    if (readStatus == -3){
+        return -EFAULT;
+    }
+
 
     // Read status is 0 - read the message successfully
     return SUCCESS;
@@ -143,8 +147,12 @@ static ssize_t device_write( struct file* file, const char __user* buffer, size_
     }
 
     writeStatus = writeMessageToChannel(currentChannel, buffer, length);
-    if (writeStatus < 0){
+    if (writeStatus == -1){
         return -EINVAL;
+    }
+
+    if (writeStatus == -2){
+        return -EFAULT;
     }
 
     // Write was successful
@@ -489,27 +497,27 @@ CHANNEL* findChannelInDevice(DEVICE* device, unsigned long channelId){
 
 // Write a message to a channel, return num of bytes written or -1 on error
 int writeMessageToChannel(CHANNEL* channel, const char* message, int messageLength){
-    int i;
-    int bytesWrote;
+    unsigned long bytesNoWritten;
     if (messageLength > BUF_LEN){
         return -1;
     }
-    for (i=0; i < messageLength; i++){
-        get_user(channel->channelBuffer[i], &message[i]);
+
+    bytesNoWritten = copy_from_user(channel->channelBuffer, message, messageLength);
+    if (bytesNoWritten != 0){
+        // problem with user space buffer 
+        return -2;
     }
 
     //update the channel and return number of bytes written to channel
-    bytesWrote = i;
     channel->messageExists = 1;
-    channel->currentMessageLength = bytesWrote;
-    return bytesWrote;
+    channel->currentMessageLength = messageLength;
+    return messageLength;
 }
 
 // Read a message from a channel, return num of bytes read from channel or -1 on error
 int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength){
     int currentMsgLength;
-    int i;
-    int bytesRead;
+    int bytesNotRead;
     if (channel->messageExists == 0){ //there isn't a message on this channel
         return -1;
     }
@@ -518,11 +526,13 @@ int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength)
         return -2;
     }
 
-    for (i=0; i < currentMsgLength; i++){
-        put_user(channel->channelBuffer[i], &userBuffer[i]);
+    bytesNotRead = copy_to_user(userBuffer, channel->channelBuffer, currentMsgLength);
+
+    if (bytesNotRead != 0){
+        // some error with user space buffer
+        return -3;
     }
 
     // return number of bytes read
-    bytesRead = i;
-    return bytesRead;
+    return currentMsgLength;
 }
