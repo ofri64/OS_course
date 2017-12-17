@@ -129,6 +129,10 @@ static ssize_t device_read( struct file* file, char __user* buffer, size_t lengt
         return -ENOSPC;
     }
 
+    if (readStatus == -3){
+        return -EFAULT;
+    }
+
 
     // Read status is 0 - read the message successfully
     return SUCCESS;
@@ -578,10 +582,10 @@ int writeMessageToChannel(CHANNEL* channel, const char* message, int messageLeng
     return i;
 }
 
-// Read a message from a channel, return num of bytes read from channel or -1 on error
+// Read a message from a channel, return num of bytes read from channel or < 0 on error
 int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength){
     int currentMsgLength;
-    int i;
+    unsigned long bytesNotRead;
     printk("Inside the read message from channel helper function\n");
     if (channel->messageExists == 0){ //there isn't a message on this channel
         printk("Read failed. the channel exist but there isn't a message yet on the channel\n");
@@ -593,11 +597,14 @@ int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength)
         return -2;
     }
 
-    for (i=0; i < currentMsgLength; i++){
-        put_user(channel->channelBuffer[i], &userBuffer[i]);
+    bytesNotRead = copy_to_user(&userBuffer, channel->channelBuffer, currentMsgLength);
+
+    if (bytesNotRead != 0){
+        printk("Read failed. something wrong with user space provided buffer");
+        return -3;
     }
 
     // return number of bytes read
     printk("Read from channel %ld a message with length %d\n", channel->channelId, i);
-    return i;
+    return currentMsgLength;
 }
