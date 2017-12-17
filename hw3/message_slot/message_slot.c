@@ -600,11 +600,12 @@ int readMessageFromChannel(CHANNEL* channel, char* userBuffer, int bufferLength)
     bytesNotRead = copy_to_user(&userBuffer, channel->channelBuffer, currentMsgLength);
 
     if (bytesNotRead != 0){
-        printk("Read failed. something wrong with user space provided buffer");
+        prinkt("the value of bytes not read is %d\n", bytesNotRead);
+        printk("Read failed. something wrong with user space provided buffer\n");
         return -3;
     }
 
     // return number of bytes read
-    printk("Read from channel %ld a message with length %d\n", channel->channelId, i);
+    printk("Read from channel %ld a message with length %d\n", channel->channelId, currentMsgLength-1);
     return currentMsgLength;
 }
