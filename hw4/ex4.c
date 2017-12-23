@@ -11,7 +11,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 
-#define CHUNK_SIZE 2
+#define CHUNK_SIZE 3
 #define CREATE_PERMISSIONS 0666
 #define NUM_ARGS_ERROR "Error: You must supply at least 2 arguments - one output file and at least 1 input file\n"
 #define MEMORY_ERROR "Error: Memory allocation failed\n"
@@ -107,7 +107,6 @@ int main (int argc, char *argv[]) {
 }
 
 void* xorChuckInputFile(void* inputFilePath){
-    int threadId = (int )pthread_self();
     char* inputFile = (char *) inputFilePath;
     int errorStatus;
     bool fileEnded = false;
@@ -147,13 +146,13 @@ void* xorChuckInputFile(void* inputFilePath){
             exit(-1);
         }
 
-        printf("Thread %d has finished writing its content to shared buffer\n", fd);
+        printf("Thread %d has finished writing its content to shared buffer and unlockd mutex\n", fd);
 
         // reset thread input buffer and conclude if thread file has ended
         resetBuffer(inputBuffer, CHUNK_SIZE);
         fileEnded = bytesRead < CHUNK_SIZE;
 
-        printf("Thread %d reset input buffer and conclude if file ended\n", fd);
+        printf("Thread %d reset input buffer and concluded the file ended is %d\n", fd, fileEnded);
 
         // Acquire lock before updating shared info about files
         printf("Thread %d is tyring to acquire lock for updating files progress\n", fd);
@@ -166,20 +165,25 @@ void* xorChuckInputFile(void* inputFilePath){
         updateSharedInfoOfFiles(fileEnded, bytesRead);
 
         // If you are not the last thread updating the shared output buffer - sleep and wait for the chunk to end
-        if (numFileFinishedChunk + numFilesEnded < numInputFiles) {
+        if (numFileFinishedChunk + numFilesEnded != numInputFiles) {
             printf("Thread for file %d, is now meditating and waiting for other threads\n", fd);
             pthread_cond_wait(&endChunkCondVar, &filesProgressLock);
             printf("Signal condition received in thread %d\n", fd);
         }
 
-        // If you are the last thread to finish - write from output buffer to output file,
-        // also reset shared buffer and variables and finally release lock and signal event
-        if (numFileFinishedChunk == numInputFiles) {
+        else{
+            // If you are the last thread to finish - write from output buffer to output file,
+            // also reset shared buffer and variables and finally release lock and signal event
             writeToOutputBuffer();
             resetSharedVarsForChunk();
-            printf("Sending end of chunk signal from thread %d\n", fd);
-            pthread_cond_broadcast(&endChunkCondVar);
+            printf("Finished writing the buffer to output in thread %d\n", fd);
+//            if (numFilesEnded < numInputFiles -1){
+                // Broadcast signal if you are not the only thread that left - i.e there are sleeping threads
+                pthread_cond_broadcast(&endChunkCondVar);
+                printf("Sent broadcast end of chunk signal from thread %d\n", fd);
+//            }
         }
+
         printf("Thread for file %d is now releasing files progress lock\n", fd);
         errorStatus = pthread_mutex_unlock(&filesProgressLock);
         if (errorStatus) {
@@ -201,12 +205,13 @@ void resetBuffer(char *buffer, int bufferSize){
 }
 
 void updateSharedInfoOfFiles(bool fileEnded, ssize_t fileBytesRead){
-    numFileFinishedChunk++;
     if (fileBytesRead > maxBytesReadForCurrentChunk){
         maxBytesReadForCurrentChunk = fileBytesRead;
     }
     if (fileEnded){
         numFilesEnded++;
+    } else{
+        numFileFinishedChunk++;
     }
 }
 
