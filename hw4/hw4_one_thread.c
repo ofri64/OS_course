@@ -12,9 +12,10 @@
 #define CHUNK_SIZE 1024
 #define CREATE_PERMISSIONS 0666
 #define NUM_ARGS_ERROR "Error: You must supply at least 2 arguments - one output file and at least 1 input file\n"
-#define MEMORY_ERROR "Error: Mermory allocation faild\n"
+#define MEMORY_ERROR "Error: Memory allocation failed\n"
 #define OPEN_ERROR "Error: Cannot open file from path %s\n"
 #define READ_ERROR "Error: Cannot read from file %s\n"
+#define WRITE_ERROR "Error: Could not write to output file%s\n"
 
 ssize_t xorChuckInputFile(char* inputFile, char* sharedBuffer, int offset);
 ssize_t getMaxSize(const ssize_t* sizesArray, ssize_t arrayLength);
@@ -53,6 +54,11 @@ int main (int argc, char *argv[]) {
 
         maxBytesReadFromFiles = getMaxSize(bytesReadForChunk, numInputFiles);
         ssize_t byteWritten = write(outputFd, sharedBuffer, (size_t ) maxBytesReadFromFiles);
+        if (byteWritten != maxBytesReadFromFiles){
+            printf(WRITE_ERROR, outputFile);
+            perror(strerror(errno));
+            exit(-1);
+        }
         outputByteLocation += CHUNK_SIZE;
         resetBuffer(sharedBuffer, CHUNK_SIZE);
     }
