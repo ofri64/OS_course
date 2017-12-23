@@ -34,7 +34,7 @@ void resetSharedVarsForChunk();
 int outputFd;
 int numInputFiles;
 char sharedBuffer[CHUNK_SIZE] = {0};
-ssize_t maxBytesReadForCurrentChunk = 0;
+ssize_t maxBytesReadForCurrentChunk = -1;
 int numFileFinishedChunk = 0;
 int numFilesEnded = 0;
 pthread_mutex_t outBufferLock;
@@ -56,7 +56,7 @@ int main (int argc, char *argv[]) {
 
     pthread_mutex_init(&outBufferLock, NULL);
     pthread_mutex_init(&filesProgressLock, NULL);
-    pthread_cond_init (&endChunkCondVar, NULL);
+    pthread_cond_init(&endChunkCondVar, NULL);
 
     // Initialize memory for threads object
 
@@ -95,7 +95,7 @@ int main (int argc, char *argv[]) {
             printf(JOIN_ERROR, strerror(errorStatus));
         }
     }
-    printf ("Main(): Waited on %d  threads. Done.\n", numInputFiles);
+    printf ("Main(): Waited on %d threads. Done.\n", numInputFiles);
 
     // clean up and exit
     close(outputFd);
@@ -111,7 +111,6 @@ void* xorChuckInputFile(void* inputFilePath){
     char* inputFile = (char *) inputFilePath;
     int errorStatus;
     bool fileEnded = false;
-    printf("Thread for input file %s with id %d is starting\n",inputFile, threadId);
 
     // open file only for reading and initialize local input buffer
     int fd = open(inputFile, O_RDONLY);
@@ -119,6 +118,7 @@ void* xorChuckInputFile(void* inputFilePath){
         printf(OPEN_ERROR, inputFile);
         exit(-1);
     }
+    printf("Thread for input file %s with file descriptor %d is starting\n",inputFile, fd);
     char inputBuffer[CHUNK_SIZE];
 
     while (!fileEnded) {
@@ -147,11 +147,16 @@ void* xorChuckInputFile(void* inputFilePath){
             exit(-1);
         }
 
+        printf("Thread %d has finished writing its content to shared buffer\n", fd);
+
         // reset thread input buffer and conclude if thread file has ended
         resetBuffer(inputBuffer, CHUNK_SIZE);
         fileEnded = bytesRead < CHUNK_SIZE;
 
+        printf("Thread %d reset input buffer and conclude if file ended\n", fd);
+
         // Acquire lock before updating shared info about files
+        printf("Thread %d is tyring to acquire lock for updating files progress\n", fd);
         errorStatus = pthread_mutex_lock(&filesProgressLock);
         if (errorStatus) {
             printf(LOCK_ERROR, strerror(errorStatus));
@@ -161,28 +166,29 @@ void* xorChuckInputFile(void* inputFilePath){
         updateSharedInfoOfFiles(fileEnded, bytesRead);
 
         // If you are not the last thread updating the shared output buffer - sleep and wait for the chunk to end
-        while (numFileFinishedChunk < numInputFiles) {
-            printf("Thread for file %d, is now meditating and waiting for other threads\n", threadId);
+        if (numFileFinishedChunk + numFilesEnded < numInputFiles) {
+            printf("Thread for file %d, is now meditating and waiting for other threads\n", fd);
             pthread_cond_wait(&endChunkCondVar, &filesProgressLock);
-            printf("Signal condition received in thread %d\n", threadId);
+            printf("Signal condition received in thread %d\n", fd);
         }
 
         // If you are the last thread to finish - write from output buffer to output file,
         // also reset shared buffer and variables and finally release lock and signal event
-        while (numFileFinishedChunk == numInputFiles) {
+        if (numFileFinishedChunk == numInputFiles) {
             writeToOutputBuffer();
             resetSharedVarsForChunk();
-            printf("Sending end of chunk signal from thread %d\n", threadId);
-            pthread_cond_signal(&endChunkCondVar);
-            printf("Releasing files progress lock and starting next chunk phase\n");
-            errorStatus = pthread_mutex_unlock(&filesProgressLock);
-            if (errorStatus) {
-                printf(UNLOCK_ERROR, strerror(errorStatus));
-                exit(-1);
-            }
+            printf("Sending end of chunk signal from thread %d\n", fd);
+            pthread_cond_broadcast(&endChunkCondVar);
+        }
+        printf("Thread for file %d is now releasing files progress lock\n", fd);
+        errorStatus = pthread_mutex_unlock(&filesProgressLock);
+        if (errorStatus) {
+            printf(UNLOCK_ERROR, strerror(errorStatus));
+            exit(-1);
         }
     }
 
+    printf("Thread %d has finished its file and ended\n", fd);
     close(fd);
     pthread_exit(NULL);
 }
@@ -205,18 +211,16 @@ void updateSharedInfoOfFiles(bool fileEnded, ssize_t fileBytesRead){
 }
 
 void writeToOutputBuffer(){
-    for (int i = 0; i < maxBytesReadForCurrentChunk; ++i){
         ssize_t byteWritten = write(outputFd, sharedBuffer, (size_t ) maxBytesReadForCurrentChunk);
         if (byteWritten != maxBytesReadForCurrentChunk){
             printf(WRITE_ERROR);
             perror(strerror(errno));
             exit(-1);
-        }
     }
 }
 
 void resetSharedVarsForChunk(){
     resetBuffer(sharedBuffer, CHUNK_SIZE);
-    maxBytesReadForCurrentChunk = 0;
-    numFilesEnded = 0;
+    maxBytesReadForCurrentChunk = -1;
+    numFileFinishedChunk = 0;
 }
