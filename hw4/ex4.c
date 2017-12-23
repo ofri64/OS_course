@@ -11,7 +11,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 
-#define CHUNK_SIZE 3
+#define CHUNK_SIZE 1048576
 #define CREATE_PERMISSIONS 0666
 #define NUM_ARGS_ERROR "Error: You must supply at least 2 arguments - one output file and at least 1 input file\n"
 #define MEMORY_ERROR "Error: Memory allocation failed\n"
@@ -177,11 +177,8 @@ void* xorChuckInputFile(void* inputFilePath){
             writeToOutputBuffer();
             resetSharedVarsForChunk();
             printf("Finished writing the buffer to output in thread %d\n", fd);
-//            if (numFilesEnded < numInputFiles -1){
-                // Broadcast signal if you are not the only thread that left - i.e there are sleeping threads
                 pthread_cond_broadcast(&endChunkCondVar);
                 printf("Sent broadcast end of chunk signal from thread %d\n", fd);
-//            }
         }
 
         printf("Thread for file %d is now releasing files progress lock\n", fd);
