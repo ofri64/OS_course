@@ -12,7 +12,7 @@
 #include <stdbool.h>
 
 #define CHUNK_SIZE 1048576
-#define CREATE_PERMISSIONS 0666
+#define CREATE_PERMISSIONS 0777
 #define NUM_ARGS_ERROR "Error: You must supply at least 2 arguments - one output file and at least 1 input file\n"
 #define MEMORY_ERROR "Error: Memory allocation failed\n"
 #define OPEN_ERROR "Error: Cannot open file from path %s\n"
