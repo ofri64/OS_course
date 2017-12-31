@@ -13,12 +13,13 @@
 
 #define CHUNK_SIZE 1048576
 #define CREATE_PERMISSIONS 0777
+#define WELCOME_MESSAGE "Hello, creating %s from %d input files\n"
+#define TERMINATION_MESSAGE "Created %s with size %d bytes\n"
 #define NUM_ARGS_ERROR "Error: You must supply at least 2 arguments - one output file and at least 1 input file\n"
 #define MEMORY_ERROR "Error: Memory allocation failed\n"
 #define OPEN_ERROR "Error: Cannot open file from path %s\n"
 #define READ_ERROR "Error: Cannot read from file %s\n"
 #define WRITE_ERROR "Error: Could not write to output file\n"
-#define WELCOME_MESSAGE "Hello, creating %s from %d input files\n"
 #define CREATE_THREAD_ERROR "Error: Could not create thread for input file %d with the following error %s\n"
 #define LOCK_ERROR "Error: An error has occurred trying to acquire shared buffer lock: %s\n"
 #define UNLOCK_ERROR "Error: An error has occurred trying to unlock shared buffer lock: %s\n"
@@ -28,7 +29,7 @@ void* xorChuckInputFile(void*);
 void resetBuffer(char *buffer, int bufferSize);
 void updateSharedInfoOfFiles(bool fileEnded, ssize_t fileBytesRead);
 void writeToOutputBuffer();
-void resetSharedVarsForChunk();
+void updateAndResetSharedVarsForChunk();
 
 
 int outputFd;
@@ -37,6 +38,7 @@ char sharedBuffer[CHUNK_SIZE] = {0};
 ssize_t maxBytesReadForCurrentChunk = -1;
 int numFileFinishedChunk = 0;
 int numFilesEnded = 0;
+int totalBytesWritten = 0;
 pthread_mutex_t outBufferLock;
 pthread_mutex_t filesProgressLock;
 pthread_cond_t  endChunkCondVar;
@@ -95,7 +97,10 @@ int main (int argc, char *argv[]) {
             printf(JOIN_ERROR, strerror(errorStatus));
         }
     }
-    printf ("Main(): Waited on %d threads. Done.\n", numInputFiles);
+    printf("Main(): Waited on %d threads. Done.\n", numInputFiles);
+
+    // Print termination message
+    printf(TERMINATION_MESSAGE, outputFile, totalBytesWritten);
 
     // clean up and exit
     close(outputFd);
@@ -175,10 +180,10 @@ void* xorChuckInputFile(void* inputFilePath){
             // If you are the last thread to finish - write from output buffer to output file,
             // also reset shared buffer and variables and finally release lock and signal event
             writeToOutputBuffer();
-            resetSharedVarsForChunk();
+            updateAndResetSharedVarsForChunk();
             printf("Finished writing the buffer to output in thread %d\n", fd);
-                pthread_cond_broadcast(&endChunkCondVar);
-                printf("Sent broadcast end of chunk signal from thread %d\n", fd);
+            pthread_cond_broadcast(&endChunkCondVar);
+            printf("Sent broadcast end of chunk signal from thread %d\n", fd);
         }
 
         printf("Thread for file %d is now releasing files progress lock\n", fd);
@@ -213,16 +218,17 @@ void updateSharedInfoOfFiles(bool fileEnded, ssize_t fileBytesRead){
 }
 
 void writeToOutputBuffer(){
-        ssize_t byteWritten = write(outputFd, sharedBuffer, (size_t ) maxBytesReadForCurrentChunk);
-        if (byteWritten != maxBytesReadForCurrentChunk){
-            printf(WRITE_ERROR);
-            perror(strerror(errno));
-            exit(-1);
+    ssize_t byteWritten = write(outputFd, sharedBuffer, (size_t ) maxBytesReadForCurrentChunk);
+    if (byteWritten != maxBytesReadForCurrentChunk){
+        printf(WRITE_ERROR);
+        perror(strerror(errno));
+        exit(-1);
     }
 }
 
-void resetSharedVarsForChunk(){
+void updateAndResetSharedVarsForChunk(){
     resetBuffer(sharedBuffer, CHUNK_SIZE);
+    totalBytesWritten += maxBytesReadForCurrentChunk;
     maxBytesReadForCurrentChunk = -1;
     numFileFinishedChunk = 0;
 }
