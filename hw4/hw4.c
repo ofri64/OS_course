@@ -112,6 +112,7 @@ int main (int argc, char *argv[]) {
 void* xorChuckInputFile(void* inputFilePath){
     char* inputFile = (char *) inputFilePath;
     int errorStatus;
+    size_t numBytesReadDuringIteration = 0;
     bool fileEnded = false;
 
     // open file only for reading and initialize local input buffer
@@ -125,10 +126,16 @@ void* xorChuckInputFile(void* inputFilePath){
     while (!fileEnded) {
 
         // read chunk size (or less) data from the file
-        ssize_t bytesRead = read(fd, inputBuffer, CHUNK_SIZE);
-        if (bytesRead < 0) {
-            printf(READ_ERROR, inputFile);
-            exit(-1);
+        while (numBytesReadDuringIteration < CHUNK_SIZE){
+            ssize_t bytesRead = read(fd, inputBuffer + numBytesReadDuringIteration, CHUNK_SIZE - numBytesReadDuringIteration);
+            if (bytesRead < 0) {
+                printf(READ_ERROR, inputFile);
+                exit(-1);
+            }
+            if (bytesRead == 0){ // reached end of file
+                break;
+            }
+            numBytesReadDuringIteration += bytesRead;
         }
 
         // Acquire lock before updating the shared output buffer data
@@ -138,7 +145,7 @@ void* xorChuckInputFile(void* inputFilePath){
             exit(-1);
         }
 
-        for (int i = 0; i < bytesRead; ++i) {
+        for (int i = 0; i < numBytesReadDuringIteration; ++i) {
             sharedBuffer[i] = sharedBuffer[i] ^ inputBuffer[i];
         }
 
@@ -149,8 +156,10 @@ void* xorChuckInputFile(void* inputFilePath){
         }
 
         // reset thread input buffer and conclude if thread file has ended
+        fileEnded = numBytesReadDuringIteration < CHUNK_SIZE;
         resetBuffer(inputBuffer, CHUNK_SIZE);
-        fileEnded = bytesRead < CHUNK_SIZE;
+        size_t bytesReadFromSpecificFile = numBytesReadDuringIteration;
+        numBytesReadDuringIteration = 0;
 
         // Acquire lock before updating shared info about files
         errorStatus = pthread_mutex_lock(&filesProgressLock);
@@ -159,7 +168,7 @@ void* xorChuckInputFile(void* inputFilePath){
             exit(-1);
         }
 
-        updateSharedInfoOfFiles(fileEnded, bytesRead);
+        updateSharedInfoOfFiles(fileEnded, bytesReadFromSpecificFile);
 
         // If you are not the last thread updating the shared output buffer - sleep and wait for the chunk to end
         if (numFileFinishedChunk + numFilesEnded != numInputFiles) {
@@ -204,11 +213,15 @@ void updateSharedInfoOfFiles(bool fileEnded, ssize_t fileBytesRead){
 }
 
 void writeToOutputBuffer(){
-    ssize_t byteWritten = write(outputFd, sharedBuffer, (size_t ) maxBytesReadForCurrentChunk);
-    if (byteWritten != maxBytesReadForCurrentChunk){
-        printf(WRITE_ERROR);
-        perror(strerror(errno));
-        exit(-1);
+    size_t totalBytesWrittenInCurrentIteration = 0;
+    while (totalBytesWrittenInCurrentIteration < maxBytesReadForCurrentChunk){
+        ssize_t byteWritten = write(outputFd, sharedBuffer + totalBytesWrittenInCurrentIteration, (size_t ) maxBytesReadForCurrentChunk - totalBytesWrittenInCurrentIteration);
+        if (byteWritten < 0){
+            printf(WRITE_ERROR);
+            perror(strerror(errno));
+            exit(-1);
+        }
+        totalBytesWrittenInCurrentIteration += byteWritten;
     }
 }
 
