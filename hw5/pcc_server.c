@@ -49,8 +49,10 @@ int main(int argc, char *argv[]){
 
     // Preparation steps before accepting connections
     pthread_mutex_t pccLock;
-    int initError = pthread_mutex_init(&pccLock, NULL);
-    if (initError != 0){
+    pthread_mutex_t connectionLock;
+    int initPccLockError = pthread_mutex_init(&pccLock, NULL);
+    int initCleanupLockError = pthread_mutex_init(&connectionLock, NULL);
+    if (initPccLockError != 0 || initCleanupLockError !=0){
         printf(MUTEX_INIT_ERROR, strerror(errno));
         exit(-1);
     }
@@ -71,30 +73,29 @@ int main(int argc, char *argv[]){
         // Prepare data for a new connection handled in a separate thread
 
         // Create a new connection object
-        CONNECTION* connection = createConnection(connFd, &pccLock, ppc_total);
+        CONNECTION* connection = createConnection(connFd, &pccLock, &connectionLock, ppc_total);
         if (connection == NULL){
             printf(MEMORY_ALLOC_ERROR);
             continue;
         }
 
-        // Initiate thread data structure
-        THREAD_ATTR* connectionThread = assignThreadAttributes(connection, &list);
-        if (connectionThread == NULL){
-            printf(MEMORY_ALLOC_ERROR);
-            continue;
-        }
-        // Create new Thread
-        int threadError = pthread_create(&connection->threadId, NULL, connectionResponse, (void *) connectionThread);
+        // Add new connection to open connections list
+        addConnectionToList(&list, connection);
+
+        // Create new thread to handle server response
+        int threadError = pthread_create(&connection->threadId, NULL, connectionResponse, (void *) connection);
         if (threadError != 0){
             printf(THREAD_CREATE_ERROR, strerror(errno));
             continue;
         }
 
+
+        //TODO: Implement clean up closed connections logic
         break;
     }
 
 
-
+    //TODO: Make sure we clean up everything upon SIGINT
     pthread_mutex_destroy(&pccLock);
     close(listenFd);
 }
@@ -125,16 +126,18 @@ int getPortNumber(char* string){
     return portNum;
 }
 
-CONNECTION* createConnection(int connectionFd, pthread_mutex_t* lock, int* sharedPPC){
+CONNECTION* createConnection(int connectionFd, pthread_mutex_t* lock,pthread_mutex_t* connectionsLock ,int* sharedPPC){
     CONNECTION* connection = (CONNECTION*) malloc(sizeof(CONNECTION));
     if (connection == NULL){
         return NULL;
     }
 
     connection->connectionFd = connectionFd;
-    connection->sharedLock = lock;
+    connection->sharedPccLock = lock;
+    connection->sharedConnectionsLock = connectionsLock;
     connection->sharedPCC = sharedPPC;
     connection->threadId = 0;
+    connection->connectionIsOpen = true;
     connection->next = NULL;
     return connection;
 }
@@ -176,21 +179,5 @@ void removeConnectionFromList(CONNECTIONS_LIST* list, CONNECTION* connection){
         else{
             current = current->next;
         }
-    }
-}
-
-THREAD_ATTR* assignThreadAttributes(CONNECTION* connection, CONNECTIONS_LIST* connectionsList){
-    THREAD_ATTR* threadAttribute = (THREAD_ATTR*) malloc(sizeof(THREAD_ATTR));
-    if (threadAttribute == NULL){
-        return NULL;
-    }
-
-    threadAttribute->connection = connection;
-    threadAttribute->connectionsList = connectionsList;
-    return threadAttribute;
-}
-void destroyThreadAttributes(THREAD_ATTR* threadAttributes){
-    if (threadAttributes != NULL){
-        free(threadAttributes);
     }
 }

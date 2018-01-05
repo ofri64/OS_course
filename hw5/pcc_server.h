@@ -31,8 +31,10 @@
 typedef struct connection{
     int connectionFd;
     pthread_t threadId;
-    pthread_mutex_t* sharedLock;
+    pthread_mutex_t* sharedPccLock;
+    pthread_mutex_t* sharedConnectionsLock;
     int* sharedPCC;
+    bool connectionIsOpen;
     struct connection* next;
 } CONNECTION;
 
@@ -40,17 +42,10 @@ typedef struct connections_list{
     CONNECTION* head;
 } CONNECTIONS_LIST;
 
-typedef struct thread_attributes{
-    CONNECTION* connection;
-    CONNECTIONS_LIST* connectionsList;
-} THREAD_ATTR;
-
-CONNECTION* createConnection(int connectionFd, pthread_mutex_t* lock, int* sharedPPC);
+CONNECTION* createConnection(int connectionFd, pthread_mutex_t* pccLock, pthread_mutex_t* connectionsLock, int* sharedPPC);
 void destroyConnection(CONNECTION* connection);
 void addConnectionToList(CONNECTIONS_LIST* list, CONNECTION* connection);
 void removeConnectionFromList(CONNECTIONS_LIST* list, CONNECTION* connection);
-THREAD_ATTR* assignThreadAttributes(CONNECTION* connection, CONNECTIONS_LIST* connectionsList);
-void destroyThreadAttributes(THREAD_ATTR* threadAttributes);
 bool isPrintableCharacter(char c);
 int getPortNumber(char* string);
 void* connectionResponse(void* threadAttributes);
