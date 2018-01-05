@@ -17,7 +17,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#define NUM_PRINTABLE_CHARS 95
 #define MAX_LISTEN_QUEUE 100
+#define CLEANUP_FREQ 10
 #define THREAD_READ_BUFFER_SIZE 1024
 #define PROGRAM_ARG_ERROR "Error: You must specify only one value between 0 and 65535, representing the desired port number\n"
 #define SOCKET_CREATE_ERROR "Error: Failed to create a socket due to the following error: %s\n"
@@ -45,7 +47,7 @@ typedef struct connections_list{
 CONNECTION* createConnection(int connectionFd, pthread_mutex_t* pccLock, pthread_mutex_t* connectionsLock, int* sharedPPC);
 void destroyConnection(CONNECTION* connection);
 void addConnectionToList(CONNECTIONS_LIST* list, CONNECTION* connection);
-void removeConnectionFromList(CONNECTIONS_LIST* list, CONNECTION* connection);
+void removeClosedConnectionFromList(CONNECTIONS_LIST *list);
 bool isPrintableCharacter(char c);
 int getPortNumber(char* string);
 void* connectionResponse(void* threadAttributes);

@@ -7,6 +7,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pthread")
 
 set(SOURCE_FILES
-        hw5/pcc_server.c hw5/pcc_server.h)
-
+        hw5/pcc_server.c hw5/pcc_server.h
+#        hw5/pcc_client.c hw5/pcc_client.h
+        )
 add_executable(OS_course ${SOURCE_FILES})
