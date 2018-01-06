@@ -76,13 +76,15 @@ int main(int argc, char *argv[]) {
     unsigned long totalBytesHeader = sizeof(unsigned int);
     unsigned long numBytesHeaderSent = 0;
     while (numBytesHeaderSent < totalBytesHeader){
-        long currentByteHeaderSent = write(sockFd, &totalBytesHeader + numBytesHeaderSent, totalBytesHeader - numBytesHeaderSent);
+        long currentByteHeaderSent = write(sockFd, &header + numBytesHeaderSent, totalBytesHeader - numBytesHeaderSent);
         if (currentByteHeaderSent < 0){
             printf(WRITE_SOCKET_ERROR, strerror(errno));
             exit(-1);
         }
         numBytesHeaderSent += currentByteHeaderSent;
     }
+
+    printf("Wrote the header!\n");
 
     // then write message itself
     int totalBytesSent = 0;
@@ -97,6 +99,8 @@ int main(int argc, char *argv[]) {
 
     free(dataBuffer); // send our message already - can free the data buffer
 
+    printf("Wrote the data!\n");
+
 //    // read answer for server
 //    unsigned numPrintableChars;
 //    long bytesRead = read(sockFd, &numPrintableChars, 1);
@@ -109,6 +113,8 @@ int main(int argc, char *argv[]) {
 //    printf("# of printable characters: %u\n", numPrintableChars);
 
     // close the connection from client side (only) and exit
+
+
     if (close(sockFd) < 0){
         printf(CLOSE_SOCKET_ERROR, strerror(errno));
         exit(-1);

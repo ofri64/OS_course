@@ -241,6 +241,9 @@ void* connectionResponse(void* threadAttributes){
     }
 
     int N = parseHeader(header);
+    printf("Length of data to come is %d\n", N);
+    close(connFd);
+    pthread_exit(NULL);
 
 
 }
