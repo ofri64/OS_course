@@ -20,7 +20,7 @@
 #define NUM_PRINTABLE_CHARS 95
 #define MAX_LISTEN_QUEUE 100
 #define CLEANUP_FREQ 10
-#define THREAD_READ_BUFFER_SIZE 1024
+#define HEADER_LENGTH 4
 #define PROGRAM_ARG_ERROR "Error: You must specify only one value between 0 and 65535, representing the desired port number\n"
 #define SOCKET_CREATE_ERROR "Error: Failed to create a socket due to the following error: %s\n"
 #define BIND_ERROR "Error: Couldn't bind socket due to the following error: %s\n"
@@ -29,6 +29,8 @@
 #define MUTEX_INIT_ERROR "Error: Failed to initiate mutex due to the following error: %s\n"
 #define MEMORY_ALLOC_ERROR "Error: Memory allocation error, connection could not be established\n"
 #define THREAD_CREATE_ERROR "Error: Failed to create a new thread to handle connection due to the following error: %s\n"
+#define LOCK_ERROR "Error: Could not acquire/release lock due to the following reason %s\n"
+#define READ_SOCKET_ERROR "Error: Failed to read answer from server due to the following error %s\n"
 
 typedef struct connection{
     int connectionFd;
@@ -51,5 +53,6 @@ void removeClosedConnectionFromList(CONNECTIONS_LIST *list);
 bool isPrintableCharacter(char c);
 int getPortNumber(char* string);
 void* connectionResponse(void* threadAttributes);
+int parseHeader(void* header);
 
 #endif //OS_COURSE_PCC_SERVER_H

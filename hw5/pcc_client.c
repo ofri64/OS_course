@@ -23,7 +23,6 @@ int main(int argc, char *argv[]) {
 
     // Prepare dataBuffer structures for tcp connection
     struct sockaddr_in serverAddress;
-//    socklen_t addressSize = sizeof(struct sockaddr_in);
     memset(&serverAddress, 0, sizeof(serverAddress)); // initiate all bytes in structure to zero
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(port); //htons for endiannes
@@ -35,6 +34,10 @@ int main(int argc, char *argv[]) {
         printf(CONNECT_ERROR, strerror(errno));
         exit(-1);
     }
+
+    // Assign buffer to hold "protocol header" - 4 bytes to hold "N"
+
+    unsigned int header = length;
 
     // Assign buffer to hold the data we wish to send to server
     char* dataBuffer = (char*) calloc(length, sizeof(char));
@@ -66,7 +69,22 @@ int main(int argc, char *argv[]) {
         exit(-1);
     };
 
+
     // write data to server
+
+    // first write header
+    unsigned long totalBytesHeader = sizeof(unsigned int);
+    unsigned long numBytesHeaderSent = 0;
+    while (numBytesHeaderSent < totalBytesHeader){
+        long currentByteHeaderSent = write(sockFd, &totalBytesHeader + numBytesHeaderSent, totalBytesHeader - numBytesHeaderSent);
+        if (currentByteHeaderSent < 0){
+            printf(WRITE_SOCKET_ERROR, strerror(errno));
+            exit(-1);
+        }
+        numBytesHeaderSent += currentByteHeaderSent;
+    }
+
+    // then write message itself
     int totalBytesSent = 0;
     while (totalBytesSent < length){
         long currentBytesSent = write(sockFd, dataBuffer + totalBytesSent, length - totalBytesSent);
@@ -79,16 +97,16 @@ int main(int argc, char *argv[]) {
 
     free(dataBuffer); // send our message already - can free the data buffer
 
-    // read answer for server
-    unsigned numPrintableChars;
-    long bytesRead = read(sockFd, &numPrintableChars, 1);
-    if (bytesRead < 0){
-        printf(READ_SOCKET_ERROR, strerror(errno));
-        exit(-1);
-    }
-
-    // print the answer
-    printf("# of printable characters: %u\n", numPrintableChars);
+//    // read answer for server
+//    unsigned numPrintableChars;
+//    long bytesRead = read(sockFd, &numPrintableChars, 1);
+//    if (bytesRead < 0){
+//        printf(READ_SOCKET_ERROR, strerror(errno));
+//        exit(-1);
+//    }
+//
+//    // print the answer
+//    printf("# of printable characters: %u\n", numPrintableChars);
 
     // close the connection from client side (only) and exit
     if (close(sockFd) < 0){

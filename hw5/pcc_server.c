@@ -50,6 +50,7 @@ int main(int argc, char *argv[]){
     // Preparation steps before accepting connections
     pthread_mutex_t pccLock;
     pthread_mutex_t connectionLock;
+    int lockError;
     int initPccLockError = pthread_mutex_init(&pccLock, NULL);
     int initCleanupLockError = pthread_mutex_init(&connectionLock, NULL);
     if (initPccLockError != 0 || initCleanupLockError !=0){
@@ -82,33 +83,50 @@ int main(int argc, char *argv[]){
             continue;
         }
 
-        // Add new connection to open connections list
-        addConnectionToList(&list, connection);
-
         // Create new thread to handle server response
         int threadError = pthread_create(&connection->threadId, NULL, connectionResponse, (void *) connection);
         if (threadError != 0){
+            destroyConnection(connection);
             printf(THREAD_CREATE_ERROR, strerror(errno));
             continue;
         }
 
-        if (connectionsOpened % CLEANUP_FREQ == 0){ // clean up memory for connections that ended
-            //TODO: Implement clean up closed connections logic. first acquire lock .
+        // Add the new connection to open connections list
+        if ((lockError = pthread_mutex_lock(&connectionLock)) != 0){
+            printf(LOCK_ERROR, strerror(lockError));
+            exit(-1);
         }
 
+        addConnectionToList(&list, connection);
 
-        break;
+        if ((lockError = pthread_mutex_unlock(&connectionLock)) != 0){
+            printf(LOCK_ERROR, strerror(lockError));
+            exit(-1);
+        }
+
+        // clean up memory for connections that ended - check only once for 10 connection/threads
+        if (connectionsOpened % CLEANUP_FREQ == 0){ // clean up memory for connections that ended
+
+            if ((lockError = pthread_mutex_lock(&connectionLock)) != 0){
+                printf(LOCK_ERROR, strerror(lockError));
+                exit(-1);
+            }
+
+            removeClosedConnectionFromList(&list);
+
+            if ((lockError = pthread_mutex_unlock(&connectionLock)) != 0){
+                printf(LOCK_ERROR, strerror(lockError));
+                exit(-1);
+            }
+        }
     }
 
 
     //TODO: Make sure we clean up everything upon SIGINT
     // TODO: have to destroy 2 mutexes and close listening port
-    pthread_mutex_destroy(&pccLock);
-    close(listenFd);
+//    pthread_mutex_destroy(&pccLock);
+//    close(listenFd);
 }
-
-
-
 
 bool isPrintableCharacter(char c){
     if (c >= 32 && c <= 126)
@@ -191,4 +209,38 @@ void removeClosedConnectionFromList(CONNECTIONS_LIST *list) {
     if (!head->connectionIsOpen) { // need to remove head of list
         list->head = head->next; // ok even if now head is NULL
     }
+}
+
+int parseHeader(void* header){
+    char* headerArray = (char *) header;
+    int n = 0;
+    for (int i = 0; i < 4; i++){
+        n += headerArray[3-i] & 0xFF;
+        if (i < 3){
+            n <<= 8;
+        }
+    }
+    return n;
+}
+
+void* connectionResponse(void* threadAttributes){
+    CONNECTION* connection = (CONNECTION*) threadAttributes;
+    int connFd = connection->connectionFd;
+
+    // read packet header - 4 bytes length and convert it to int
+    char header[HEADER_LENGTH];
+    unsigned totalHeaderBytesRead = 0;
+    while (totalHeaderBytesRead < HEADER_LENGTH){
+        long currentHeaderBytesRead = read(connFd, header + totalHeaderBytesRead, HEADER_LENGTH - totalHeaderBytesRead);
+        if (currentHeaderBytesRead < 0){
+            printf(READ_SOCKET_ERROR, strerror(errno));
+            exit(-1);
+            //TODO: think if can close only thread and not process
+        }
+        totalHeaderBytesRead += currentHeaderBytesRead;
+    }
+
+    int N = parseHeader(header);
+
+
 }
