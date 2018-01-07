@@ -4,6 +4,10 @@
 
 #include "pcc_server.h"
 
+CONNECTIONS_LIST list = {.head = NULL}; // global connection list
+int listenFd; // global listing socket file descriptor
+unsigned pcc_total[NUM_PRINTABLE_CHARS] = {0}; // global pcc_counter. has to be global in order to access to it from signal handler
+
 int main(int argc, char *argv[]){
     if (argc != 2){
         printf(PROGRAM_ARG_ERROR);
@@ -16,10 +20,20 @@ int main(int argc, char *argv[]){
     }
 
     unsigned short port = (unsigned short) portCheck;
-    unsigned ppc_total[NUM_PRINTABLE_CHARS] = {0};
+
+    // Assign SIGINT handler function
+
+    struct sigaction interruptAction;
+    memset(&interruptAction, 0, sizeof(interruptAction));
+    interruptAction.sa_sigaction = interruptHandler;
+    interruptAction.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGINT, &interruptAction, NULL) != 0){
+        printf(SIGNAL_ASSIGN_ERROR, strerror(errno));
+        exit(-1);
+    }
 
     // Create a new socket
-    int listenFd = socket(AF_INET, SOCK_STREAM, 0);
+    listenFd = socket(AF_INET, SOCK_STREAM, 0);
     if (listenFd < 0){
         printf(SOCKET_CREATE_ERROR, strerror(errno));
         exit(-1);
@@ -58,9 +72,7 @@ int main(int argc, char *argv[]){
         exit(-1);
     }
 
-    // Create a connection list - data structure (linked list) for open connections
-    CONNECTIONS_LIST list;
-    list.head = NULL;
+    // Initiate variable to number of connection created - will be used for clean up logic
     unsigned connectionsOpened = 0;
 
     // From now on - accept connections and manage every connection in a different thread
@@ -77,7 +89,7 @@ int main(int argc, char *argv[]){
         // Prepare data for a new connection handled in a separate thread
 
         // Create a new connection object
-        CONNECTION* connection = createConnection(connFd, &pccLock, &connectionLock, ppc_total);
+        CONNECTION* connection = createConnection(connFd, &pccLock, &connectionLock, pcc_total);
         if (connection == NULL){
             printf(MEMORY_ALLOC_ERROR);
             continue;
@@ -120,12 +132,8 @@ int main(int argc, char *argv[]){
             }
         }
     }
-
-
     //TODO: Make sure we clean up everything upon SIGINT
     // TODO: have to destroy 2 mutexes and close listening port
-//    pthread_mutex_destroy(&pccLock);
-//    close(listenFd);
 }
 
 bool isPrintableCharacter(char c){
@@ -186,6 +194,7 @@ void addConnectionToList(CONNECTIONS_LIST* list, CONNECTION* connection){
 }
 
 void removeClosedConnectionFromList(CONNECTIONS_LIST *list) {
+    printf("We are inside cleanup connection linked list\n");
     if (list == NULL) {
         return;
     }
@@ -211,28 +220,17 @@ void removeClosedConnectionFromList(CONNECTIONS_LIST *list) {
     }
 }
 
-unsigned parseHeader(void* header){
-    char* headerArray = (char *) header;
-    int n = 0;
-    for (int i = 0; i < 4; i++){
-        n += headerArray[3-i] & 0xFF;
-        if (i < 3){
-            n <<= 8;
-        }
-    }
-    return (unsigned) n;
-}
-
 void* connectionResponse(void* threadAttributes){
     CONNECTION* connection = (CONNECTION*) threadAttributes;
     int connFd = connection->connectionFd;
     int lockError;
 
-    // read packet header - 4 bytes length and convert it to int
-    char header[HEADER_LENGTH];
+    // read packet header - 4 bytes length and convert it to unsigned int
+    unsigned N;
+    unsigned headerLengthBytes = sizeof(unsigned);
     unsigned totalHeaderBytesRead = 0;
-    while (totalHeaderBytesRead < HEADER_LENGTH){
-        long currentHeaderBytesRead = read(connFd, header + totalHeaderBytesRead, HEADER_LENGTH - totalHeaderBytesRead);
+    while (totalHeaderBytesRead < headerLengthBytes){
+        long currentHeaderBytesRead = read(connFd, &N + totalHeaderBytesRead, headerLengthBytes - totalHeaderBytesRead);
         if (currentHeaderBytesRead < 0){
             printf(READ_SOCKET_ERROR, strerror(errno));
             exit(-1);
@@ -241,7 +239,6 @@ void* connectionResponse(void* threadAttributes){
         totalHeaderBytesRead += currentHeaderBytesRead;
     }
 
-    unsigned N = parseHeader(header);
     printf("Length of data to come is %d\n", N);
 
     // Allocate space for data packet - size N
@@ -316,7 +313,6 @@ void* connectionResponse(void* threadAttributes){
     }
 
     printf("updated the connection is closed\n");
-
     pthread_exit(NULL);
 }
 
@@ -333,4 +329,35 @@ unsigned updateSharedPcc(unsigned N, const char *message, unsigned *sharedPcc){
         }
     }
     return numPrintableChars;
+}
+
+void interruptHandler(int signum, siginfo_t* info, void* ptr){
+    printf("I'm inside interrupt signal handler!\n");
+
+    // First close the listing socket - stopping us from accepting new tcp connections
+    close(listenFd);
+
+    // Wait for all threads still on the list to add (some of the connections may already ended)
+    CONNECTION* currentConnection = list.head;
+    while (currentConnection != NULL){
+        pthread_t threadNum = currentConnection->threadId;
+        int errorStatus = pthread_join(threadNum, NULL);
+        if (errorStatus != 0){
+            printf(THREAD_JOIN_ERROR, strerror(errorStatus));
+            exit(-1);
+        }
+        currentConnection = currentConnection->next;
+    }
+
+    // Now all threads finished we can call to remove closed connection without locking before
+    removeClosedConnectionFromList(&list); // although it is not necessary we will free memory
+
+    // print pcc_counter values
+    for (int i = 0; i < NUM_PRINTABLE_CHARS; i++){
+        int c = i + PRINTABLE_OFFSET;
+        printf("char '%c': %u times\n", c, pcc_total[i]);
+    }
+
+    // not destroying locks but rest of the resources are freed
+    exit(0);
 }

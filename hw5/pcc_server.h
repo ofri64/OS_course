@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
@@ -20,9 +21,9 @@
 #define NUM_PRINTABLE_CHARS 95
 #define MAX_LISTEN_QUEUE 100
 #define CLEANUP_FREQ 10
-#define HEADER_LENGTH 4
 #define PRINTABLE_OFFSET 32
 #define PROGRAM_ARG_ERROR "Error: You must specify only one value between 0 and 65535, representing the desired port number\n"
+#define SIGNAL_ASSIGN_ERROR "Error: Falied to assign a signal handler due to the following error: %s\n"
 #define SOCKET_CREATE_ERROR "Error: Failed to create a socket due to the following error: %s\n"
 #define BIND_ERROR "Error: Couldn't bind socket due to the following error: %s\n"
 #define LISTEN_ERROR "Error: Listen command failed for the socket due to the following error: %s\n"
@@ -30,9 +31,10 @@
 #define MUTEX_INIT_ERROR "Error: Failed to initiate mutex due to the following error: %s\n"
 #define MEMORY_ALLOC_ERROR "Error: Memory allocation error, connection could not be established\n"
 #define THREAD_CREATE_ERROR "Error: Failed to create a new thread to handle connection due to the following error: %s\n"
+#define THREAD_JOIN_ERROR "Error: Failed to wait for a thread due to the following reason %s\n"
 #define LOCK_ERROR "Error: Could not acquire/release lock due to the following reason %s\n"
 #define READ_SOCKET_ERROR "Error: Failed to read answer from server due to the following error %s\n"
-#define WRITE_SOCKET_ERROR "Error: Failed to write answer to clien due to the following error %s\n"
+#define WRITE_SOCKET_ERROR "Error: Failed to write answer to client due to the following error %s\n"
 
 typedef struct connection{
     int connectionFd;
@@ -55,7 +57,7 @@ void removeClosedConnectionFromList(CONNECTIONS_LIST *list);
 bool isPrintableCharacter(char c);
 int getPortNumber(char* string);
 void* connectionResponse(void* threadAttributes);
-unsigned parseHeader(void* header);
 unsigned updateSharedPcc(unsigned N, const char *message, unsigned *sharedPcc);
+void interruptHandler(int signum, siginfo_t* info, void* ptr);
 
 #endif //OS_COURSE_PCC_SERVER_H
