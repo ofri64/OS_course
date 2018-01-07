@@ -24,6 +24,7 @@ int main(int argc, char *argv[]) {
 
     int invalidIpString = inet_aton(serverAddressString, &serverAddress.sin_addr);
     if (invalidIpString == 0) {
+        printf(ARG_TRANS_ERROR, strerror(errno));
         exit(-1);
     }
 
