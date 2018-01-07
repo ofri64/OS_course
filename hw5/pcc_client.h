@@ -16,6 +16,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
+#define RANDOM_BYTE_GENERATOR "/dev/urandom"
 #define PROGRAM_ARG_ERROR "Error: You must supply 3 argument - ip address, port number and number of bytes to send\n"
 #define SOCKET_CREATE_ERROR "Error: Failed to create a socket due to the following error: %s\n"
 #define CONNECT_ERROR "Error: Couldn't connect to server due to the following error: %s\n"

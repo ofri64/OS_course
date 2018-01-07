@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
     }
 
     // read the data from file
-    char* fileName = "simple_file.txt";
+    char* fileName = RANDOM_BYTE_GENERATOR;
     int dataFd = open(fileName, O_RDONLY);
     if (dataFd < 0){
         printf(OPEN_FILE_ERROR, fileName, strerror(errno));
