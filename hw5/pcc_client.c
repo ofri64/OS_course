@@ -10,9 +10,22 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
 
-    char* localHost = "127.0.0.1";
+    char* serverAddressString = argv[1];
     unsigned short port = (unsigned short) atoi(argv[2]);
     unsigned length = (unsigned) atoi(argv[3]);
+
+    // Prepare dataBuffer structures for tcp connection
+    struct sockaddr_in serverAddress;
+    memset(&serverAddress, 0, sizeof(serverAddress)); // initiate all bytes in structure to zero
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(port); //htons for endiannes
+
+    // Convert the server address from URL or dot-notation ip address to in_addr structure
+
+    int invalidIpString = inet_aton(serverAddressString, &serverAddress.sin_addr);
+    if (invalidIpString == 0) {
+        exit(-1);
+    }
 
     // Create new socket
     int sockFd = socket(AF_INET, SOCK_STREAM, 0);
@@ -20,13 +33,6 @@ int main(int argc, char *argv[]) {
         printf(SOCKET_CREATE_ERROR, strerror(errno));
         exit(-1);
     }
-
-    // Prepare dataBuffer structures for tcp connection
-    struct sockaddr_in serverAddress;
-    memset(&serverAddress, 0, sizeof(serverAddress)); // initiate all bytes in structure to zero
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(port); //htons for endiannes
-    serverAddress.sin_addr.s_addr = inet_addr(localHost);
 
     // Initiate a tcp connection
     int connectStatus = connect(sockFd, (struct sockaddr*) &serverAddress, sizeof(serverAddress));
