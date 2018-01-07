@@ -101,19 +101,24 @@ int main(int argc, char *argv[]) {
 
     printf("Wrote the data!\n");
 
-//    // read answer for server
-//    unsigned numPrintableChars;
-//    long bytesRead = read(sockFd, &numPrintableChars, 1);
-//    if (bytesRead < 0){
-//        printf(READ_SOCKET_ERROR, strerror(errno));
-//        exit(-1);
-//    }
-//
-//    // print the answer
-//    printf("# of printable characters: %u\n", numPrintableChars);
+    // read answer for server
+    //TODO: use "htons" or so to enable connect with different endiness
+    unsigned numPrintableChars;
+    unsigned answerSizeToRead = sizeof(unsigned);
+    unsigned totalAnsBytesRead = 0;
+    while (totalAnsBytesRead < answerSizeToRead){
+        long currentBytesRead = read(sockFd, &numPrintableChars + totalAnsBytesRead, answerSizeToRead - totalAnsBytesRead);
+        if (currentBytesRead < 0){
+            printf(READ_SOCKET_ERROR, strerror(errno));
+            exit(-1);
+        }
+        totalAnsBytesRead += currentBytesRead;
+    }
 
-    // close the connection from client side (only) and exit
+    // print the answer
+    printf("# of printable characters: %u\n", numPrintableChars);
 
+     // close the connection from client side (only) and exit
 
     if (close(sockFd) < 0){
         printf(CLOSE_SOCKET_ERROR, strerror(errno));

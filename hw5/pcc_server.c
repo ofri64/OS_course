@@ -265,7 +265,7 @@ void* connectionResponse(void* threadAttributes){
 
     printf("Finished reading the entire message\n");
 
-    // Update to shared ppc array. Performs atomically
+    // Update to shared ppc array. Perform it atomically
 
     if ((lockError = pthread_mutex_lock(connection->sharedPccLock)) != 0){
         printf(LOCK_ERROR, strerror(lockError));
