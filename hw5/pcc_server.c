@@ -16,7 +16,7 @@ int main(int argc, char *argv[]){
     }
 
     unsigned short port = (unsigned short) portCheck;
-    int ppc_total[NUM_PRINTABLE_CHARS] = {0};
+    unsigned ppc_total[NUM_PRINTABLE_CHARS] = {0};
 
     // Create a new socket
     int listenFd = socket(AF_INET, SOCK_STREAM, 0);
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]){
     // Create a connection list - data structure (linked list) for open connections
     CONNECTIONS_LIST list;
     list.head = NULL;
-    int connectionsOpened = 0;
+    unsigned connectionsOpened = 0;
 
     // From now on - accept connections and manage every connection in a different thread
     while (1){
@@ -105,7 +105,7 @@ int main(int argc, char *argv[]){
         }
 
         // clean up memory for connections that ended - check only once for 10 connection/threads
-        if (connectionsOpened % CLEANUP_FREQ == 0){ // clean up memory for connections that ended
+        if (connectionsOpened % CLEANUP_FREQ == 0){
 
             if ((lockError = pthread_mutex_lock(&connectionLock)) != 0){
                 printf(LOCK_ERROR, strerror(lockError));
@@ -151,7 +151,7 @@ int getPortNumber(char* string){
     return portNum;
 }
 
-CONNECTION* createConnection(int connectionFd, pthread_mutex_t* lock,pthread_mutex_t* connectionsLock ,int* sharedPPC){
+CONNECTION* createConnection(int connectionFd, pthread_mutex_t* lock,pthread_mutex_t* connectionsLock ,unsigned* sharedPPC){
     CONNECTION* connection = (CONNECTION*) malloc(sizeof(CONNECTION));
     if (connection == NULL){
         return NULL;
@@ -211,7 +211,7 @@ void removeClosedConnectionFromList(CONNECTIONS_LIST *list) {
     }
 }
 
-int parseHeader(void* header){
+unsigned parseHeader(void* header){
     char* headerArray = (char *) header;
     int n = 0;
     for (int i = 0; i < 4; i++){
@@ -220,12 +220,13 @@ int parseHeader(void* header){
             n <<= 8;
         }
     }
-    return n;
+    return (unsigned) n;
 }
 
 void* connectionResponse(void* threadAttributes){
     CONNECTION* connection = (CONNECTION*) threadAttributes;
     int connFd = connection->connectionFd;
+    int lockError;
 
     // read packet header - 4 bytes length and convert it to int
     char header[HEADER_LENGTH];
@@ -240,10 +241,96 @@ void* connectionResponse(void* threadAttributes){
         totalHeaderBytesRead += currentHeaderBytesRead;
     }
 
-    int N = parseHeader(header);
+    unsigned N = parseHeader(header);
     printf("Length of data to come is %d\n", N);
+
+    // Allocate space for data packet - size N
+    char* message = (char*) calloc((size_t) N, sizeof(char));
+    if (message == NULL){
+        printf(MEMORY_ALLOC_ERROR);
+        exit(-1);
+    }
+
+    // Read the message
+    unsigned totalMessageBytesRead = 0;
+    while (totalMessageBytesRead < N){
+        long currentMessageBytesRead = read(connFd, message + totalMessageBytesRead, N - totalMessageBytesRead);
+        if (currentMessageBytesRead < 0){
+            printf(READ_SOCKET_ERROR, strerror(errno));
+            exit(-1);
+            //TODO: think if can close only thread and not process
+        }
+        totalMessageBytesRead += currentMessageBytesRead;
+    }
+
+    printf("Finished reading the entire message\n");
+
+    // Update to shared ppc array. Performs atomically
+
+    if ((lockError = pthread_mutex_lock(connection->sharedPccLock)) != 0){
+        printf(LOCK_ERROR, strerror(lockError));
+        exit(-1);
+    }
+
+    unsigned totalPcc = updateSharedPcc(N, message, connection->sharedPCC);
+
+    if ((lockError = pthread_mutex_unlock(connection->sharedPccLock)) != 0){
+        printf(LOCK_ERROR, strerror(lockError));
+        exit(-1);
+    }
+
+    free(message); // don't need this memory allocation anymore after we computed total pcc
+
+    printf("Updated the shared pcc array\n");
+
+    // Send num of printable chars back to client
+
+    unsigned numAnsBytesSent = 0;
+    unsigned numAnsBytesToWrite = sizeof(unsigned);
+    while (numAnsBytesSent < numAnsBytesToWrite){
+        long currentAnsBytesWrote = write(connFd, &totalPcc + numAnsBytesSent, numAnsBytesToWrite - numAnsBytesSent);
+        if (currentAnsBytesWrote < 0){
+            printf(WRITE_SOCKET_ERROR, strerror(errno));
+            exit(-1);
+        }
+        numAnsBytesSent += currentAnsBytesWrote;
+    }
+
+    printf("Sent answer back to client\n");
+
+    // close the connection from server side
     close(connFd);
+
+    // update this thread finished it's calculation - again atomically
+
+    if ((lockError = pthread_mutex_lock(connection->sharedConnectionsLock)) != 0){
+        printf(LOCK_ERROR, strerror(lockError));
+        exit(-1);
+    }
+
+     connection->connectionIsOpen = false;
+
+    if ((lockError = pthread_mutex_unlock(connection->sharedConnectionsLock)) != 0){
+        printf(LOCK_ERROR, strerror(lockError));
+        exit(-1);
+    }
+
+    printf("updated the connection is closed\n");
+
     pthread_exit(NULL);
+}
 
-
+unsigned updateSharedPcc(unsigned N, const char *message, unsigned *sharedPcc){
+    bool printable;
+    unsigned numPrintableChars = 0;
+    for (unsigned i = 0; i < N; i++){
+        char c = message[i];
+        printable = isPrintableCharacter(c);
+        if (printable){
+            numPrintableChars++;
+            int charDecimal = c - PRINTABLE_OFFSET;
+            sharedPcc[charDecimal] += 1;
+        }
+    }
+    return numPrintableChars;
 }

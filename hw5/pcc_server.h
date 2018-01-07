@@ -21,6 +21,7 @@
 #define MAX_LISTEN_QUEUE 100
 #define CLEANUP_FREQ 10
 #define HEADER_LENGTH 4
+#define PRINTABLE_OFFSET 32
 #define PROGRAM_ARG_ERROR "Error: You must specify only one value between 0 and 65535, representing the desired port number\n"
 #define SOCKET_CREATE_ERROR "Error: Failed to create a socket due to the following error: %s\n"
 #define BIND_ERROR "Error: Couldn't bind socket due to the following error: %s\n"
@@ -31,13 +32,14 @@
 #define THREAD_CREATE_ERROR "Error: Failed to create a new thread to handle connection due to the following error: %s\n"
 #define LOCK_ERROR "Error: Could not acquire/release lock due to the following reason %s\n"
 #define READ_SOCKET_ERROR "Error: Failed to read answer from server due to the following error %s\n"
+#define WRITE_SOCKET_ERROR "Error: Failed to write answer to clien due to the following error %s\n"
 
 typedef struct connection{
     int connectionFd;
     pthread_t threadId;
     pthread_mutex_t* sharedPccLock;
     pthread_mutex_t* sharedConnectionsLock;
-    int* sharedPCC;
+    unsigned * sharedPCC;
     bool connectionIsOpen;
     struct connection* next;
 } CONNECTION;
@@ -46,13 +48,14 @@ typedef struct connections_list{
     CONNECTION* head;
 } CONNECTIONS_LIST;
 
-CONNECTION* createConnection(int connectionFd, pthread_mutex_t* pccLock, pthread_mutex_t* connectionsLock, int* sharedPPC);
+CONNECTION* createConnection(int connectionFd, pthread_mutex_t* pccLock, pthread_mutex_t* connectionsLock, unsigned* sharedPPC);
 void destroyConnection(CONNECTION* connection);
 void addConnectionToList(CONNECTIONS_LIST* list, CONNECTION* connection);
 void removeClosedConnectionFromList(CONNECTIONS_LIST *list);
 bool isPrintableCharacter(char c);
 int getPortNumber(char* string);
 void* connectionResponse(void* threadAttributes);
-int parseHeader(void* header);
+unsigned parseHeader(void* header);
+unsigned updateSharedPcc(unsigned N, const char *message, unsigned *sharedPcc);
 
 #endif //OS_COURSE_PCC_SERVER_H
