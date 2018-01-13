@@ -18,9 +18,11 @@
 #include <fcntl.h>
 #include <netdb.h>
 
+#define MAX_DNS_IP_RES 1025
+
 #define RANDOM_BYTE_GENERATOR "/dev/urandom"
 #define PROGRAM_ARG_ERROR "Error: You must supply 3 argument - ip address, port number and number of bytes to send\n"
-#define ARG_TRANS_ERROR "Error: Faild to translate your ip address or URL string. error reason is %s\n"
+#define ARG_TRANS_ERROR "Error: Failed to translate your ip address or URL string. error reason is %s\n"
 #define SOCKET_CREATE_ERROR "Error: Failed to create a socket due to the following error: %s\n"
 #define CONNECT_ERROR "Error: Couldn't connect to server due to the following error: %s\n"
 #define MEMORY_ALLOC_ERROR "Error: Memory allocation error. could not allocate a buffer\n"

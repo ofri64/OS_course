@@ -21,11 +21,43 @@ int main(int argc, char *argv[]) {
     serverAddress.sin_port = htons(port); //htons for endiannes
 
     // Convert the server address from URL or dot-notation ip address to in_addr structure
+    int invalidIpString;
 
-    int invalidIpString = inet_aton(serverAddressString, &serverAddress.sin_addr);
+    // Try to convert from ip address in a dot notation string
+
+    invalidIpString = inet_aton(serverAddressString, &serverAddress.sin_addr);
     if (invalidIpString == 0) {
-        printf(ARG_TRANS_ERROR, strerror(errno));
-        exit(-1);
+        // Try to translate from host name to ip address using DNS query
+
+        struct addrinfo* dnsResult;
+        int dnsError;
+
+        // Resolve the domain name into a list of addresses */
+        dnsError = getaddrinfo(serverAddressString, NULL, NULL, &dnsResult);
+        if (dnsError != 0) {
+            printf(ARG_TRANS_ERROR, gai_strerror(dnsError));
+            exit(-1);
+        }
+
+        // Get the first DNS lookup result - output ip address as string
+        char hostIpAddress[MAX_DNS_IP_RES];
+        dnsError = getnameinfo(dnsResult->ai_addr, dnsResult->ai_addrlen, hostIpAddress, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+        if (dnsError != 0){
+            freeaddrinfo(dnsResult);
+            printf(ARG_TRANS_ERROR, gai_strerror(dnsError));
+            exit(-1);
+        }
+
+        freeaddrinfo(dnsResult);
+        printf("Host name is %s, and its ip address dot notation is: %s\n", argv[1], hostIpAddress);
+
+        // Now that we got the ip in a dot notation string, convert it to the desired structure to use with connect
+
+        invalidIpString = inet_aton(hostIpAddress, &serverAddress.sin_addr);
+        if (invalidIpString == 0){
+            printf(ARG_TRANS_ERROR, strerror(errno));
+            exit(-1);
+        }
     }
 
     // Create new socket
