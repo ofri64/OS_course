@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
         }
 
         freeaddrinfo(dnsResult);
-        printf("Host name is %s, and its ip address dot notation is: %s\n", argv[1], hostIpAddress);
+//        printf("Host name is %s, and its ip address dot notation is: %s\n", argv[1], hostIpAddress);
 
         // Now that we got the ip in a dot notation string, convert it to the desired structure to use with connect
 
@@ -123,7 +123,7 @@ int main(int argc, char *argv[]) {
         numBytesHeaderSent += currentByteHeaderSent;
     }
 
-    printf("Wrote the header!\n");
+//    printf("Wrote the header!\n");
 
     // then write message itself
     int totalBytesSent = 0;
@@ -138,10 +138,9 @@ int main(int argc, char *argv[]) {
 
     free(dataBuffer); // send our message already - can free the data buffer
 
-    printf("Wrote the data!\n");
+//    printf("Wrote the data!\n");
 
     // read answer for server
-    //TODO: use "htons" or so to enable connect with different endiness
     unsigned numPrintableChars;
     unsigned answerSizeToRead = sizeof(unsigned);
     unsigned totalAnsBytesRead = 0;

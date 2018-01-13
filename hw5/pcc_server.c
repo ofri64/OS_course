@@ -132,8 +132,6 @@ int main(int argc, char *argv[]){
             }
         }
     }
-    //TODO: Make sure we clean up everything upon SIGINT
-    // TODO: have to destroy 2 mutexes and close listening port
 }
 
 bool isPrintableCharacter(char c){
@@ -194,7 +192,7 @@ void addConnectionToList(CONNECTIONS_LIST* list, CONNECTION* connection){
 }
 
 void removeClosedConnectionFromList(CONNECTIONS_LIST *list) {
-    printf("We are inside cleanup connection linked list\n");
+//    printf("We are inside cleanup connection linked list\n");
     if (list == NULL) {
         return;
     }
@@ -234,12 +232,11 @@ void* connectionResponse(void* threadAttributes){
         if (currentHeaderBytesRead < 0){
             printf(READ_SOCKET_ERROR, strerror(errno));
             exit(-1);
-            //TODO: think if can close only thread and not process
         }
         totalHeaderBytesRead += currentHeaderBytesRead;
     }
 
-    printf("Length of data to come is %d\n", N);
+//    printf("Length of data to come is %d\n", N);
 
     // Allocate space for data packet - size N
     char* message = (char*) calloc((size_t) N, sizeof(char));
@@ -255,12 +252,11 @@ void* connectionResponse(void* threadAttributes){
         if (currentMessageBytesRead < 0){
             printf(READ_SOCKET_ERROR, strerror(errno));
             exit(-1);
-            //TODO: think if can close only thread and not process
         }
         totalMessageBytesRead += currentMessageBytesRead;
     }
 
-    printf("Finished reading the entire message\n");
+//    printf("Finished reading the entire message\n");
 
     // Update to shared ppc array. Perform it atomically
 
@@ -278,7 +274,7 @@ void* connectionResponse(void* threadAttributes){
 
     free(message); // don't need this memory allocation anymore after we computed total pcc
 
-    printf("Updated the shared pcc array\n");
+//    printf("Updated the shared pcc array\n");
 
     // Send num of printable chars back to client
 
@@ -293,7 +289,7 @@ void* connectionResponse(void* threadAttributes){
         numAnsBytesSent += currentAnsBytesWrote;
     }
 
-    printf("Sent answer back to client\n");
+//    printf("Sent answer back to client\n");
 
     // close the connection from server side
     close(connFd);
@@ -312,7 +308,7 @@ void* connectionResponse(void* threadAttributes){
         exit(-1);
     }
 
-    printf("updated the connection is closed\n");
+//    printf("updated the connection is closed\n");
     pthread_exit(NULL);
 }
 
@@ -332,7 +328,7 @@ unsigned updateSharedPcc(unsigned N, const char *message, unsigned *sharedPcc){
 }
 
 void interruptHandler(int signum, siginfo_t* info, void* ptr){
-    printf("I'm inside interrupt signal handler!\n");
+//    printf("I'm inside interrupt signal handler!\n");
 
     // First close the listing socket - stopping us from accepting new tcp connections
     close(listenFd);
