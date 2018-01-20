@@ -277,8 +277,7 @@ void* connectionResponse(void* threadAttributes){
             printf(LOCK_ERROR, strerror(lockError));
             exit(-1);
         }
-
-        printf("Finished iteration, read from client %u bytes and updated pcc counter\n", iterationTotalMessageBytesRead);
+//        printf("Finished iteration, read from client %u bytes and updated pcc counter\n", iterationTotalMessageBytesRead);
 
 
         // Update total bytes read

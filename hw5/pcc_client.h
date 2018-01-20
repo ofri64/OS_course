@@ -19,6 +19,7 @@
 #include <netdb.h>
 
 #define MAX_DNS_IP_RES 1025
+#define MAX_READ_BUFFER_SIZE 1024
 
 #define RANDOM_BYTE_GENERATOR "/dev/urandom"
 #define PROGRAM_ARG_ERROR "Error: You must supply 3 argument - ip address, port number and number of bytes to send\n"

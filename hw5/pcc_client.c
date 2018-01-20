@@ -78,39 +78,6 @@ int main(int argc, char *argv[]) {
 
     unsigned int header = length;
 
-    // Assign buffer to hold the data we wish to send to server
-    char* dataBuffer = (char*) calloc(length, sizeof(char));
-    if (dataBuffer == NULL){
-        printf(MEMORY_ALLOC_ERROR);
-        exit(-1);
-    }
-
-    // read the data from file
-    char* fileName = RANDOM_BYTE_GENERATOR;
-    int dataFd = open(fileName, O_RDONLY);
-    if (dataFd < 0){
-        printf(OPEN_FILE_ERROR, fileName, strerror(errno));
-        exit(-1);
-    }
-
-    unsigned totalBytesRead = 0;
-    while (totalBytesRead < length){
-        long currentBytesRead = read(dataFd, dataBuffer + totalBytesRead, length - totalBytesRead);
-        if (currentBytesRead < 0){
-            printf(READ_FILE_ERROR, strerror(errno));
-            exit(-1);
-        }
-        totalBytesRead += currentBytesRead;
-    }
-
-    if (close(dataFd) < 0){  // close the data file - we don't need it anymore in this program
-        printf(CLOSE_FILE_ERROR, strerror(errno));
-        exit(-1);
-    };
-
-
-    // write data to server
-
     // first write header
     unsigned long totalBytesHeader = sizeof(unsigned int);
     unsigned long numBytesHeaderSent = 0;
@@ -123,22 +90,61 @@ int main(int argc, char *argv[]) {
         numBytesHeaderSent += currentByteHeaderSent;
     }
 
-//    printf("Wrote the header!\n");
+    // Assign buffer to hold the data we wish to send to server - send in iterations
+    unsigned totalBytesToSendServer = length;
+    char dataBuffer[MAX_READ_BUFFER_SIZE];
+    unsigned totalBytesReadAndSent = 0;
 
-    // then write message itself
-    int totalBytesSent = 0;
-    while (totalBytesSent < length){
-        long currentBytesSent = write(sockFd, dataBuffer + totalBytesSent, length - totalBytesSent);
-        if (currentBytesSent < 0){
-            printf(WRITE_SOCKET_ERROR, strerror(errno));
-            exit(-1);
-        }
-        totalBytesSent += currentBytesSent;
+    // open the data file to read
+    int dataFd = open(RANDOM_BYTE_GENERATOR, O_RDONLY);
+    if (dataFd < 0){
+        printf(OPEN_FILE_ERROR, RANDOM_BYTE_GENERATOR, strerror(errno));
+        exit(-1);
     }
 
-    free(dataBuffer); // send our message already - can free the data buffer
+    while (totalBytesReadAndSent < totalBytesToSendServer){
 
-//    printf("Wrote the data!\n");
+        // compute how many bytes to read at current iteration
+        unsigned totalBytesReadSendIteration;
+        if (length - totalBytesReadAndSent < MAX_READ_BUFFER_SIZE){
+            totalBytesReadSendIteration = length - totalBytesReadAndSent;
+        } else{
+            totalBytesReadSendIteration = MAX_READ_BUFFER_SIZE;
+        }
+
+        unsigned totalIterationBytesRead = 0;
+        while (totalIterationBytesRead < totalBytesReadSendIteration){
+            long currentBytesRead = read(dataFd, dataBuffer + totalIterationBytesRead, totalBytesReadSendIteration - totalIterationBytesRead);
+            if (currentBytesRead < 0){
+                printf(READ_FILE_ERROR, strerror(errno));
+                exit(-1);
+            }
+            totalIterationBytesRead += currentBytesRead;
+        }
+
+        printf("Finished reading from file at iteration, read from urandom %u bytes \n", totalBytesReadSendIteration);
+
+        // then write message to server
+        int totalBytesSent = 0;
+        while (totalBytesSent < totalBytesReadSendIteration){
+            long currentBytesSent = write(sockFd, dataBuffer + totalBytesSent, totalBytesReadSendIteration - totalBytesSent);
+            if (currentBytesSent < 0){
+                printf(WRITE_SOCKET_ERROR, strerror(errno));
+                exit(-1);
+            }
+            totalBytesSent += currentBytesSent;
+        }
+
+//        printf("Finished writing to server at iteration, sent to server %u bytes \n", totalBytesReadSendIteration);
+
+        // update total bytes read and sent
+        totalBytesReadAndSent += totalBytesReadSendIteration;
+    }
+
+    if (close(dataFd) < 0){  // close the data file - we don't need it anymore in this program
+        printf(CLOSE_FILE_ERROR, strerror(errno));
+        exit(-1);
+    };
 
     // read answer for server
     unsigned numPrintableChars;
@@ -156,7 +162,7 @@ int main(int argc, char *argv[]) {
     // print the answer
     printf("# of printable characters: %u\n", numPrintableChars);
 
-     // close the connection from client side (only) and exit
+    // close the connection from client side (only) and exit
 
     if (close(sockFd) < 0){
         printf(CLOSE_SOCKET_ERROR, strerror(errno));
