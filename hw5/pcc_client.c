@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
         }
 
         freeaddrinfo(dnsResult);
-//        printf("Host name is %s, and its ip address dot notation is: %s\n", argv[1], hostIpAddress);
+        printf("Host name is %s, and its ip address dot notation is: %s\n", argv[1], hostIpAddress);
 
         // Now that we got the ip in a dot notation string, convert it to the desired structure to use with connect
 

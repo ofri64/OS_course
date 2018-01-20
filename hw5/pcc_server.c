@@ -221,6 +221,7 @@ void removeClosedConnectionFromList(CONNECTIONS_LIST *list) {
 void* connectionResponse(void* threadAttributes){
     CONNECTION* connection = (CONNECTION*) threadAttributes;
     int connFd = connection->connectionFd;
+    unsigned totalPcc = 0;
     int lockError;
 
     // read packet header - 4 bytes length and convert it to unsigned int
@@ -236,45 +237,56 @@ void* connectionResponse(void* threadAttributes){
         totalHeaderBytesRead += currentHeaderBytesRead;
     }
 
-//    printf("Length of data to come is %d\n", N);
+    printf("Length of data to come is %d\n", N);
 
-    // Allocate space for data packet - size N
-    char* message = (char*) calloc((size_t) N, sizeof(char));
-    if (message == NULL){
-        printf(MEMORY_ALLOC_ERROR);
-        exit(-1);
-    }
-
-    // Read the message
+    // Allocate space for data packet and initialize variables
+    char message[MAX_SERVER_BUFFER_SIZE];
     unsigned totalMessageBytesRead = 0;
+
     while (totalMessageBytesRead < N){
-        long currentMessageBytesRead = read(connFd, message + totalMessageBytesRead, N - totalMessageBytesRead);
-        if (currentMessageBytesRead < 0){
-            printf(READ_SOCKET_ERROR, strerror(errno));
+        // initialize variables for current iteration. maybe required to read less than MAX_SERVER_BUFFER_SIZE
+        unsigned iterationTotalMessageBytesRead = 0;
+
+        unsigned numBytesToReadCurrentIter;
+        if (totalMessageBytesRead + MAX_SERVER_BUFFER_SIZE > N){
+            numBytesToReadCurrentIter = N - totalMessageBytesRead;
+        } else{
+            numBytesToReadCurrentIter = MAX_SERVER_BUFFER_SIZE;
+        }
+
+        // Read current iteration bytes
+        while (iterationTotalMessageBytesRead < numBytesToReadCurrentIter){
+            long currentMessageBytesRead = read(connFd, message + iterationTotalMessageBytesRead, numBytesToReadCurrentIter - iterationTotalMessageBytesRead);
+            if (currentMessageBytesRead < 0){
+                printf(READ_SOCKET_ERROR, strerror(errno));
+                exit(-1);
+            }
+            iterationTotalMessageBytesRead += currentMessageBytesRead;
+        }
+
+        // Update to shared ppc array. Perform it atomically
+
+        if ((lockError = pthread_mutex_lock(connection->sharedPccLock)) != 0){
+            printf(LOCK_ERROR, strerror(lockError));
             exit(-1);
         }
-        totalMessageBytesRead += currentMessageBytesRead;
+
+        totalPcc += updateSharedPcc(iterationTotalMessageBytesRead, message, connection->sharedPCC);
+
+        if ((lockError = pthread_mutex_unlock(connection->sharedPccLock)) != 0){
+            printf(LOCK_ERROR, strerror(lockError));
+            exit(-1);
+        }
+
+        printf("Finished iteration, read from client %u bytes and updated pcc counter\n", iterationTotalMessageBytesRead);
+
+
+        // Update total bytes read
+        totalMessageBytesRead += iterationTotalMessageBytesRead;
     }
 
-//    printf("Finished reading the entire message\n");
+    printf("Finished reading the entire message\n");
 
-    // Update to shared ppc array. Perform it atomically
-
-    if ((lockError = pthread_mutex_lock(connection->sharedPccLock)) != 0){
-        printf(LOCK_ERROR, strerror(lockError));
-        exit(-1);
-    }
-
-    unsigned totalPcc = updateSharedPcc(N, message, connection->sharedPCC);
-
-    if ((lockError = pthread_mutex_unlock(connection->sharedPccLock)) != 0){
-        printf(LOCK_ERROR, strerror(lockError));
-        exit(-1);
-    }
-
-    free(message); // don't need this memory allocation anymore after we computed total pcc
-
-//    printf("Updated the shared pcc array\n");
 
     // Send num of printable chars back to client
 
@@ -289,7 +301,7 @@ void* connectionResponse(void* threadAttributes){
         numAnsBytesSent += currentAnsBytesWrote;
     }
 
-//    printf("Sent answer back to client\n");
+    printf("Sent answer back to client\n");
 
     // close the connection from server side
     close(connFd);
@@ -308,7 +320,7 @@ void* connectionResponse(void* threadAttributes){
         exit(-1);
     }
 
-//    printf("updated the connection is closed\n");
+    printf("updated the connection is closed\n");
     pthread_exit(NULL);
 }
 
@@ -328,7 +340,7 @@ unsigned updateSharedPcc(unsigned N, const char *message, unsigned *sharedPcc){
 }
 
 void interruptHandler(int signum, siginfo_t* info, void* ptr){
-//    printf("I'm inside interrupt signal handler!\n");
+    printf("I'm inside interrupt signal handler!\n");
 
     // First close the listing socket - stopping us from accepting new tcp connections
     close(listenFd);

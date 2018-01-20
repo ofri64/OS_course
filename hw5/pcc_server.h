@@ -22,6 +22,7 @@
 #define MAX_LISTEN_QUEUE 100
 #define CLEANUP_FREQ 10
 #define PRINTABLE_OFFSET 32
+#define MAX_SERVER_BUFFER_SIZE 1024
 #define PROGRAM_ARG_ERROR "Error: You must specify only one value between 0 and 65535, representing the desired port number\n"
 #define SIGNAL_ASSIGN_ERROR "Error: Falied to assign a signal handler due to the following error: %s\n"
 #define SOCKET_CREATE_ERROR "Error: Failed to create a socket due to the following error: %s\n"
