@@ -237,7 +237,7 @@ void* connectionResponse(void* threadAttributes){
         totalHeaderBytesRead += currentHeaderBytesRead;
     }
 
-    printf("Length of data to come is %d\n", N);
+//    printf("Length of data to come is %d\n", N);
 
     // Allocate space for data packet and initialize variables
     char message[MAX_SERVER_BUFFER_SIZE];
@@ -284,7 +284,7 @@ void* connectionResponse(void* threadAttributes){
         totalMessageBytesRead += iterationTotalMessageBytesRead;
     }
 
-    printf("Finished reading the entire message\n");
+//    printf("Finished reading the entire message\n");
 
 
     // Send num of printable chars back to client
@@ -300,7 +300,7 @@ void* connectionResponse(void* threadAttributes){
         numAnsBytesSent += currentAnsBytesWrote;
     }
 
-    printf("Sent answer back to client\n");
+//    printf("Sent answer back to client\n");
 
     // close the connection from server side
     close(connFd);
@@ -319,7 +319,7 @@ void* connectionResponse(void* threadAttributes){
         exit(-1);
     }
 
-    printf("updated the connection is closed\n");
+//    printf("updated the connection is closed\n");
     pthread_exit(NULL);
 }
 
@@ -339,7 +339,7 @@ unsigned updateSharedPcc(unsigned N, const char *message, unsigned *sharedPcc){
 }
 
 void interruptHandler(int signum, siginfo_t* info, void* ptr){
-    printf("I'm inside interrupt signal handler!\n");
+//    printf("I'm inside interrupt signal handler!\n");
 
     // First close the listing socket - stopping us from accepting new tcp connections
     close(listenFd);
