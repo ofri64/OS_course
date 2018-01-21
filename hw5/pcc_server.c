@@ -193,7 +193,7 @@ void addConnectionToList(CONNECTIONS_LIST* list, CONNECTION* connection){
 
 void removeClosedConnectionFromList(CONNECTIONS_LIST *list) {
 //    printf("We are inside cleanup connection linked list\n");
-    if (list == NULL) {
+    if (list == NULL || list->head == NULL) {
         return;
     }
     CONNECTION *head = list->head;
@@ -242,10 +242,9 @@ void* connectionResponse(void* threadAttributes){
     // Allocate space for data packet and initialize variables
     char message[MAX_SERVER_BUFFER_SIZE];
     unsigned totalMessageBytesRead = 0;
+    bool continueRead = true;
 
-    while (totalMessageBytesRead < N){
-        // initialize variables for current iteration. maybe required to read less than MAX_SERVER_BUFFER_SIZE
-        unsigned iterationTotalMessageBytesRead = 0;
+    while (continueRead){
 
         unsigned numBytesToReadCurrentIter;
         if (totalMessageBytesRead + MAX_SERVER_BUFFER_SIZE > N){
@@ -255,13 +254,16 @@ void* connectionResponse(void* threadAttributes){
         }
 
         // Read current iteration bytes
-        while (iterationTotalMessageBytesRead < numBytesToReadCurrentIter){
-            long currentMessageBytesRead = read(connFd, message + iterationTotalMessageBytesRead, numBytesToReadCurrentIter - iterationTotalMessageBytesRead);
-            if (currentMessageBytesRead < 0){
-                printf(READ_SOCKET_ERROR, strerror(errno));
-                exit(-1);
-            }
-            iterationTotalMessageBytesRead += currentMessageBytesRead;
+        long currentMessageBytesRead = read(connFd, message, numBytesToReadCurrentIter);
+        if (currentMessageBytesRead < 0){
+            printf(READ_SOCKET_ERROR, strerror(errno));
+            exit(-1);
+        }
+        if (currentMessageBytesRead == 0){
+            // problem with client - didn't fulfill protocol to send N bytes
+            // exiting without sending response
+            close(connFd);
+            pthread_exit(NULL);
         }
 
         // Update to shared ppc array. Perform it atomically
@@ -271,7 +273,7 @@ void* connectionResponse(void* threadAttributes){
             exit(-1);
         }
 
-        totalPcc += updateSharedPcc(iterationTotalMessageBytesRead, message, connection->sharedPCC);
+        totalPcc += updateSharedPcc((unsigned)currentMessageBytesRead, message, connection->sharedPCC);
 
         if ((lockError = pthread_mutex_unlock(connection->sharedPccLock)) != 0){
             printf(LOCK_ERROR, strerror(lockError));
@@ -279,9 +281,11 @@ void* connectionResponse(void* threadAttributes){
         }
 //        printf("Finished iteration, read from client %u bytes and updated pcc counter\n", iterationTotalMessageBytesRead);
 
-
         // Update total bytes read
-        totalMessageBytesRead += iterationTotalMessageBytesRead;
+        totalMessageBytesRead += currentMessageBytesRead;
+        if (totalMessageBytesRead == N){
+            continueRead = false;
+        }
     }
 
 //    printf("Finished reading the entire message\n");
